@@ -18,21 +18,11 @@ final class ComposerScript
 {
     public static function postAutoloadDump(Event $event): void
     {
-        $composer = $event->getComposer();
-
         /** @var string $vendorDir */
-        $vendorDir = $composer->getConfig()->get('vendor-dir');
+        $vendorDir = $event->getComposer()->getConfig()->get('vendor-dir');
         $basePath = dirname($vendorDir);
 
-        /** @var array<string, mixed> $extra */
-        $extra = $composer->getPackage()->getExtra();
-        $phpdot = is_array($extra['phpdot'] ?? null) ? $extra['phpdot'] : [];
-        $configDir = is_string($phpdot['config-dir'] ?? null) ? $phpdot['config-dir'] : 'config';
-        $containerDir = is_string($phpdot['container-dir'] ?? null) ? $phpdot['container-dir'] : 'container';
-        $configPath = $basePath . '/' . $configDir;
-        $containerPath = $basePath . '/' . $containerDir;
-
-        $manager = new PackageManager($vendorDir, $configPath, $containerPath);
+        $manager = new PackageManager($basePath);
         $result = $manager->rebuild();
 
         $io = $event->getIO();
