@@ -465,7 +465,6 @@ src/
 ├── Scanner/
 │   ├── PackageMeta.php
 │   ├── PackageScanner.php
-│   ├── ParamInfo.php
 │   ├── ScanResult.php
 │   └── ScannedClass.php
 ├── Manifest.php
