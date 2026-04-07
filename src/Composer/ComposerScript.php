@@ -12,48 +12,41 @@ declare(strict_types=1);
 namespace PHPdot\Package\Composer;
 
 use Composer\Script\Event;
-use PHPdot\Package\Generator\ConfigFileGenerator;
-use PHPdot\Package\Generator\DefinitionGenerator;
-use PHPdot\Package\Scanner\PackageScanner;
+use PHPdot\Package\PackageManager;
 
 final class ComposerScript
 {
     public static function postAutoloadDump(Event $event): void
     {
+        $composer = $event->getComposer();
+
         /** @var string $vendorDir */
-        $vendorDir = $event->getComposer()->getConfig()->get('vendor-dir');
+        $vendorDir = $composer->getConfig()->get('vendor-dir');
         $basePath = dirname($vendorDir);
-        $cachePath = $basePath . '/var/cache/phpdot-definitions.php';
-        $configPath = $basePath . '/config';
 
-        $scanner = new PackageScanner();
-        $classes = $scanner->scan($vendorDir);
+        /** @var array<string, mixed> $extra */
+        $extra = $composer->getPackage()->getExtra();
+        $phpdot = is_array($extra['phpdot'] ?? null) ? $extra['phpdot'] : [];
+        $configDir = is_string($phpdot['config-dir'] ?? null) ? $phpdot['config-dir'] : 'config';
+        $configPath = $basePath . '/' . $configDir;
 
-        $defGenerator = new DefinitionGenerator();
-        $content = $defGenerator->generate($classes);
-
-        $cacheDir = dirname($cachePath);
-
-        if (!is_dir($cacheDir)) {
-            mkdir($cacheDir, 0755, true);
-        }
-
-        $tmp = $cachePath . '.tmp.' . getmypid();
-        file_put_contents($tmp, $content);
-        rename($tmp, $cachePath);
-
-        if (function_exists('opcache_invalidate')) {
-            opcache_invalidate($cachePath, true);
-        }
-
-        $configGenerator = new ConfigFileGenerator();
-        $generated = $configGenerator->generate($classes, $configPath);
+        $manager = new PackageManager($vendorDir, $configPath);
+        $result = $manager->rebuild();
 
         $io = $event->getIO();
         $io->write(sprintf(
-            '<info>phpdot/package:</info> %d services cached, %d config files generated.',
-            count($classes),
-            count($generated),
+            '<info>phpdot/package:</info> %d package%s, %d service%s, %d binding%s cached.',
+            $result->packageCount,
+            $result->packageCount === 1 ? '' : 's',
+            $result->serviceCount,
+            $result->serviceCount === 1 ? '' : 's',
+            $result->bindingCount,
+            $result->bindingCount === 1 ? '' : 's',
         ));
+
+        foreach ($result->generatedConfigs as $path) {
+            $relative = str_replace($basePath . '/', '', $path);
+            $io->write(sprintf('<info>phpdot/package:</info> generated %s', $relative));
+        }
     }
 }
