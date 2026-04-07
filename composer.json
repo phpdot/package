@@ -1,0 +1,45 @@
+{
+    "name": "phpdot/package",
+    "description": "Attribute-driven package scanning, definition generation, and config scaffolding for PHPdot.",
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Omar Hamdan",
+            "email": "omar@phpdot.com"
+        }
+    ],
+    "keywords": ["package", "scanner", "generator", "attributes", "container", "autowiring"],
+    "require": {
+        "php": ">=8.3",
+        "phpdot/container": "^1.2"
+    },
+    "require-dev": {
+        "friendsofphp/php-cs-fixer": "^3.94",
+        "phpstan/phpstan": "^2.0",
+        "phpstan/phpstan-strict-rules": "^2.0",
+        "phpunit/phpunit": "^11.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "PHPdot\\Package\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "PHPdot\\Package\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "phpunit",
+        "analyse": "phpstan analyse --memory-limit=256M",
+        "cs-fix": "php-cs-fixer fix",
+        "check": [
+            "@test",
+            "@analyse"
+        ]
+    },
+    "config": {
+        "sort-packages": true
+    }
+}
