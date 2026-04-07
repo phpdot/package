@@ -233,6 +233,23 @@ final class PackageManagerTest extends TestCase
         self::assertSame($this->basePath . '/vendor/phpdot/manifest.php', $manager->manifestPath());
     }
 
+    #[Test]
+    public function it_reads_exclude_from_composer_json(): void
+    {
+        $composer = [
+            'extra' => ['phpdot' => ['exclude' => ['phpdot/i18n', 'phpdot/cache']]],
+        ];
+        file_put_contents(
+            $this->basePath . '/composer.json',
+            json_encode($composer, JSON_THROW_ON_ERROR),
+        );
+
+        $manager = new PackageManager($this->basePath);
+        $result = $manager->rebuild();
+
+        self::assertSame(0, $result->packageCount);
+    }
+
     private function removeDir(string $dir): void
     {
         if (!is_dir($dir)) {

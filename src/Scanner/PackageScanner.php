@@ -24,7 +24,10 @@ final class PackageScanner
 {
     private const string CONTAINER_PACKAGE = 'phpdot/container';
 
-    public function scan(string $vendorPath): ScanResult
+    /**
+     * @param list<string> $exclude Package names to skip
+     */
+    public function scan(string $vendorPath, array $exclude = []): ScanResult
     {
         $installedPath = $vendorPath . '/composer/installed.json';
 
@@ -56,6 +59,10 @@ final class PackageScanner
             }
 
             if ($name === self::CONTAINER_PACKAGE) {
+                continue;
+            }
+
+            if (in_array($name, $exclude, true)) {
                 continue;
             }
 
