@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace PHPdot\Package\Tests;
 
+use PHPdot\Container\ContainerBuilder;
 use PHPdot\Package\Manifest;
 use PHPdot\Package\PackageManager;
 use PHPUnit\Framework\Attributes\Test;
@@ -189,6 +190,31 @@ final class PackageManagerTest extends TestCase
         self::assertSame($this->basePath . '/vendor', $manager->vendorPath());
         self::assertSame($this->basePath . '/config', $manager->configPath());
         self::assertSame($this->basePath . '/container', $manager->containerPath());
+    }
+
+    #[Test]
+    public function load_returns_builder_with_definitions_when_file_exists(): void
+    {
+        $manager = new PackageManager($this->basePath);
+        $manager->rebuild();
+
+        $builder = new ContainerBuilder();
+        $result = $manager->load($builder);
+
+        self::assertSame($builder, $result);
+    }
+
+    #[Test]
+    public function load_returns_builder_unchanged_when_no_definitions_file(): void
+    {
+        $manager = new PackageManager($this->basePath);
+
+        self::assertFileDoesNotExist($manager->definitionsPath());
+
+        $builder = new ContainerBuilder();
+        $result = $manager->load($builder);
+
+        self::assertSame($builder, $result);
     }
 
     #[Test]
