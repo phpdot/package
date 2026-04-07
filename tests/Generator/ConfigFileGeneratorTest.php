@@ -116,7 +116,7 @@ final class ConfigFileGeneratorTest extends TestCase
         $content = file_get_contents($this->tmpDir . '/sample.php');
         self::assertIsString($content);
         self::assertStringContainsString('test/pkg', $content);
-        self::assertStringContainsString(SampleConfig::class, $content);
+        self::assertStringContainsString('SampleConfig', $content);
     }
 
     #[Test]

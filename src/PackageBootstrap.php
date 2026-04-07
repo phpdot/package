@@ -15,16 +15,16 @@ use PHPdot\Container\ContainerBuilder;
 
 final class PackageBootstrap
 {
-    public static function load(string $basePath, ContainerBuilder $builder): void
+    public static function load(string $vendorPath, ContainerBuilder $builder): void
     {
-        $cachePath = $basePath . '/var/cache/phpdot-definitions.php';
+        $path = $vendorPath . '/phpdot/definitions.php';
 
-        if (!is_file($cachePath)) {
+        if (!is_file($path)) {
             return;
         }
 
         /** @var array<string, mixed> $definitions */
-        $definitions = require $cachePath;
+        $definitions = require $path;
 
         $builder->addDefinitions($definitions);
     }
