@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace PHPdot\Package;
 
+use PHPdot\Container\ContainerBuilder;
 use PHPdot\Package\Generator\BindingFileGenerator;
 use PHPdot\Package\Generator\ConfigFileGenerator;
 use PHPdot\Package\Generator\DefinitionGenerator;
@@ -23,18 +24,72 @@ final class PackageManager
     private const string DEFINITIONS_FILE = 'definitions.php';
     private const string MANIFEST_FILE = 'manifest.php';
 
+    private readonly string $vendorPath;
+    private readonly string $configPath;
+    private readonly string $containerPath;
+
     /**
-     * @param string $vendorPath Absolute path to vendor directory
-     * @param string $configPath Absolute path to config directory
-     * @param string $containerPath Absolute path to container directory
+     * @param string $basePath Absolute path to the project root
      * @param list<string> $environments Environment names for config override blocks
      */
     public function __construct(
-        private readonly string $vendorPath,
-        private readonly string $configPath,
-        private readonly string $containerPath,
+        private readonly string $basePath,
         private readonly array $environments = ['development', 'production', 'staging'],
-    ) {}
+    ) {
+        $composerPath = $basePath . '/composer.json';
+
+        if (!is_file($composerPath)) {
+            $this->vendorPath = $basePath . '/vendor';
+            $this->configPath = $basePath . '/config';
+            $this->containerPath = $basePath . '/container';
+
+            return;
+        }
+
+        /** @var array<string, mixed> $composer */
+        $composer = json_decode((string) file_get_contents($composerPath), true, 512, JSON_THROW_ON_ERROR);
+
+        $config = is_array($composer['config'] ?? null) ? $composer['config'] : [];
+        $vendorDir = is_string($config['vendor-dir'] ?? null)
+            ? $config['vendor-dir']
+            : 'vendor';
+
+        $extra = is_array($composer['extra'] ?? null) ? $composer['extra'] : [];
+        $phpdot = is_array($extra['phpdot'] ?? null) ? $extra['phpdot'] : [];
+
+        $configDir = is_string($phpdot['config-dir'] ?? null)
+            ? $phpdot['config-dir']
+            : 'config';
+
+        $containerDir = is_string($phpdot['container-dir'] ?? null)
+            ? $phpdot['container-dir']
+            : 'container';
+
+        $this->vendorPath = $basePath . '/' . $vendorDir;
+        $this->configPath = $basePath . '/' . $configDir;
+        $this->containerPath = $basePath . '/' . $containerDir;
+    }
+
+    /**
+     * Load cached package definitions into the builder.
+     *
+     * @param ContainerBuilder $builder The container builder
+     * @return ContainerBuilder The same builder with definitions added
+     */
+    public function load(ContainerBuilder $builder): ContainerBuilder
+    {
+        $path = $this->definitionsPath();
+
+        if (!is_file($path)) {
+            return $builder;
+        }
+
+        /** @var array<string, mixed> $definitions */
+        $definitions = require $path;
+        $builder->addDefinitions($definitions);
+
+        return $builder;
+    }
 
     public function rebuild(): RebuildResult
     {
@@ -137,6 +192,26 @@ final class PackageManager
             packages: $packages,
             generatedAt: $data['generated_at'],
         );
+    }
+
+    public function basePath(): string
+    {
+        return $this->basePath;
+    }
+
+    public function vendorPath(): string
+    {
+        return $this->vendorPath;
+    }
+
+    public function configPath(): string
+    {
+        return $this->configPath;
+    }
+
+    public function containerPath(): string
+    {
+        return $this->containerPath;
     }
 
     public function definitionsPath(): string
