@@ -94,6 +94,14 @@ final class ManifestGeneratorTest extends TestCase
     }
 
     #[Test]
+    public function it_has_declare_strict_types(): void
+    {
+        $output = $this->generator->generate([]);
+
+        self::assertStringContainsString('declare(strict_types=1);', $output);
+    }
+
+    #[Test]
     public function it_has_professional_header(): void
     {
         $output = $this->generator->generate([]);

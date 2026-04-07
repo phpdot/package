@@ -115,25 +115,40 @@ final class BindingFileGeneratorTest extends TestCase
     }
 
     #[Test]
+    public function it_has_declare_strict_types(): void
+    {
+        $this->generator->generate($this->bindableClasses(), $this->packages, $this->tmpDir);
+
+        $content = $this->readGenerated('sample.php');
+        self::assertStringContainsString('declare(strict_types=1);', $content);
+    }
+
+    #[Test]
     public function it_has_professional_docblock_header(): void
     {
-        $classes = $this->bindableClasses();
-
-        $this->generator->generate($classes, $this->packages, $this->tmpDir);
+        $this->generator->generate($this->bindableClasses(), $this->packages, $this->tmpDir);
 
         $content = $this->readGenerated('sample.php');
         self::assertStringContainsString('@package     test/pkg', $content);
-        self::assertStringContainsString('@author      Test Author <test@example.com>', $content);
         self::assertStringContainsString('@see         https://github.com/test/pkg', $content);
         self::assertStringContainsString('@generated   phpdot/package', $content);
+        self::assertStringNotContainsString('@author', $content);
+    }
+
+    #[Test]
+    public function it_includes_ownership_notice(): void
+    {
+        $this->generator->generate($this->bindableClasses(), $this->packages, $this->tmpDir);
+
+        $content = $this->readGenerated('sample.php');
+        self::assertStringContainsString("This is your file", $content);
+        self::assertStringContainsString("we won't touch it", $content);
     }
 
     #[Test]
     public function it_includes_service_summary_table(): void
     {
-        $classes = $this->bindableClasses();
-
-        $this->generator->generate($classes, $this->packages, $this->tmpDir);
+        $this->generator->generate($this->bindableClasses(), $this->packages, $this->tmpDir);
 
         $content = $this->readGenerated('sample.php');
         self::assertStringContainsString('Services registered by this package:', $content);
@@ -145,21 +160,17 @@ final class BindingFileGeneratorTest extends TestCase
     #[Test]
     public function it_includes_cli_commands(): void
     {
-        $classes = $this->bindableClasses();
-
-        $this->generator->generate($classes, $this->packages, $this->tmpDir);
+        $this->generator->generate($this->bindableClasses(), $this->packages, $this->tmpDir);
 
         $content = $this->readGenerated('sample.php');
-        self::assertStringContainsString('php dot bindings:show sample', $content);
-        self::assertStringContainsString('php dot bindings:reset sample', $content);
+        self::assertStringContainsString('php dot package:bindings sample', $content);
+        self::assertStringContainsString('php dot package:reset sample', $content);
     }
 
     #[Test]
     public function it_has_use_statements(): void
     {
-        $classes = $this->bindableClasses();
-
-        $this->generator->generate($classes, $this->packages, $this->tmpDir);
+        $this->generator->generate($this->bindableClasses(), $this->packages, $this->tmpDir);
 
         $content = $this->readGenerated('sample.php');
         self::assertStringContainsString('use PHPdot\\Container\\ContainerBuilder;', $content);
@@ -170,9 +181,7 @@ final class BindingFileGeneratorTest extends TestCase
     #[Test]
     public function it_has_commented_override_section_for_binds(): void
     {
-        $classes = $this->bindableClasses();
-
-        $this->generator->generate($classes, $this->packages, $this->tmpDir);
+        $this->generator->generate($this->bindableClasses(), $this->packages, $this->tmpDir);
 
         $content = $this->readGenerated('sample.php');
         self::assertStringContainsString('Override SampleInterface', $content);
@@ -214,9 +223,7 @@ final class BindingFileGeneratorTest extends TestCase
     #[Test]
     public function it_uses_block_comments_for_code(): void
     {
-        $classes = $this->bindableClasses();
-
-        $this->generator->generate($classes, $this->packages, $this->tmpDir);
+        $this->generator->generate($this->bindableClasses(), $this->packages, $this->tmpDir);
 
         $content = $this->readGenerated('sample.php');
         self::assertStringContainsString('/*', $content);
@@ -256,9 +263,7 @@ final class BindingFileGeneratorTest extends TestCase
     #[Test]
     public function it_returns_closure_accepting_container_builder(): void
     {
-        $classes = $this->bindableClasses();
-
-        $this->generator->generate($classes, $this->packages, $this->tmpDir);
+        $this->generator->generate($this->bindableClasses(), $this->packages, $this->tmpDir);
 
         $content = $this->readGenerated('sample.php');
         self::assertStringContainsString('return static function (ContainerBuilder $builder): void {', $content);
