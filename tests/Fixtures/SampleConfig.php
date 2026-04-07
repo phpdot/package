@@ -10,13 +10,15 @@ use PHPdot\Container\Attribute\Config;
 final readonly class SampleConfig
 {
     /**
-     * @param list<string> $tags
+     * @param string $name Application name
+     * @param int $port Server port number
+     * @param bool $debug Enable debug mode
+     * @param list<string> $tags Resource tags
      */
     public function __construct(
         public string $name = 'default',
         public int $port = 3000,
         public bool $debug = false,
         public array $tags = [],
-    ) {
-    }
+    ) {}
 }

@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace PHPdot\Package;
 
+use PHPdot\Package\Generator\BindingFileGenerator;
 use PHPdot\Package\Generator\ConfigFileGenerator;
 use PHPdot\Package\Generator\DefinitionGenerator;
 use PHPdot\Package\Generator\ManifestGenerator;
@@ -22,27 +23,49 @@ final class PackageManager
     private const string DEFINITIONS_FILE = 'definitions.php';
     private const string MANIFEST_FILE = 'manifest.php';
 
+    /**
+     * @param string $vendorPath Absolute path to vendor directory
+     * @param string $configPath Absolute path to config directory
+     * @param string $containerPath Absolute path to container directory
+     * @param list<string> $environments Environment names for config override blocks
+     */
     public function __construct(
         private readonly string $vendorPath,
         private readonly string $configPath,
-    ) {
-    }
+        private readonly string $containerPath,
+        private readonly array $environments = ['development', 'production', 'staging'],
+    ) {}
 
     public function rebuild(): RebuildResult
     {
         $scanner = new PackageScanner();
-        $classes = $scanner->scan($this->vendorPath);
+        $scanResult = $scanner->scan($this->vendorPath);
+
+        $classes = $scanResult->classes;
+        $packages = $scanResult->packages;
 
         $defGenerator = new DefinitionGenerator();
-        $defContent = $defGenerator->generate($classes);
+        $defContent = $defGenerator->generate($classes, $packages);
         $this->writePhpdotFile(self::DEFINITIONS_FILE, $defContent);
 
         $manifestGenerator = new ManifestGenerator();
-        $manifestContent = $manifestGenerator->generate($classes);
+        $manifestContent = $manifestGenerator->generate($classes, $packages);
         $this->writePhpdotFile(self::MANIFEST_FILE, $manifestContent);
 
         $configGenerator = new ConfigFileGenerator();
-        $generatedConfigs = $configGenerator->generate($classes, $this->configPath);
+        $generatedConfigs = $configGenerator->generate(
+            $classes,
+            $packages,
+            $this->configPath,
+            $this->environments,
+        );
+
+        $bindingGenerator = new BindingFileGenerator();
+        $generatedBindings = $bindingGenerator->generate(
+            $classes,
+            $packages,
+            $this->containerPath,
+        );
 
         $bindingCount = 0;
         $configCount = 0;
@@ -64,6 +87,7 @@ final class PackageManager
             bindingCount: $bindingCount,
             configCount: $configCount,
             generatedConfigs: $generatedConfigs,
+            generatedBindings: $generatedBindings,
         );
     }
 
@@ -92,7 +116,7 @@ final class PackageManager
             return null;
         }
 
-        /** @var array{generated_at: string, packages: array<string, array{services: array<string, string>, configs: array<string, string>, bindings: array<string, string>, classes: list<string>}>} $data */
+        /** @var array{generated_at: string, packages: array<string, array{description: string, url: string, author: string, services: array<string, string>, configs: array<string, string>, bindings: array<string, string>}>} $data */
         $data = require $path;
 
         $packages = [];
@@ -100,10 +124,12 @@ final class PackageManager
         foreach ($data['packages'] as $name => $info) {
             $packages[$name] = new PackageInfo(
                 name: $name,
+                description: $info['description'],
+                url: $info['url'],
+                author: $info['author'],
                 services: $info['services'],
                 configs: $info['configs'],
                 bindings: $info['bindings'],
-                allClasses: $info['classes'],
             );
         }
 
@@ -133,7 +159,7 @@ final class PackageManager
         $dir = $this->phpdotDir();
 
         if (!is_dir($dir)) {
-            mkdir($dir, 0755, true);
+            mkdir($dir, 0o755, true);
         }
 
         $path = $dir . '/' . $filename;

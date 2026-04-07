@@ -25,6 +25,7 @@ final readonly class ScannedClass
      * @param list<class-string> $binds Interface FQCNs from #[Binds]
      * @param string|null $configName Config file name from #[Config], or null
      * @param string $package Composer package name
+     * @param array<string, string> $paramDescriptions Parameter name => PHPDoc description
      */
     public function __construct(
         public string $class,
@@ -33,6 +34,6 @@ final readonly class ScannedClass
         public array $binds,
         public ?string $configName,
         public string $package,
-    ) {
-    }
+        public array $paramDescriptions = [],
+    ) {}
 }

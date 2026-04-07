@@ -6,9 +6,9 @@ namespace PHPdot\Package\Tests\Generator;
 
 use PHPdot\Container\Scope;
 use PHPdot\Package\Generator\ConfigFileGenerator;
+use PHPdot\Package\Scanner\PackageMeta;
 use PHPdot\Package\Scanner\ScannedClass;
 use PHPdot\Package\Tests\Fixtures\SampleConfig;
-use PHPdot\Package\Tests\Fixtures\SampleInterface;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
@@ -17,10 +17,21 @@ final class ConfigFileGeneratorTest extends TestCase
     private ConfigFileGenerator $generator;
     private string $tmpDir;
 
+    /** @var array<string, PackageMeta> */
+    private array $packages;
+
     protected function setUp(): void
     {
         $this->generator = new ConfigFileGenerator();
         $this->tmpDir = sys_get_temp_dir() . '/phpdot_cfggen_' . uniqid();
+        $this->packages = [
+            'test/pkg' => new PackageMeta(
+                name: 'test/pkg',
+                description: 'A test package for unit testing.',
+                url: 'https://github.com/test/pkg',
+                author: 'Test Author <test@example.com>',
+            ),
+        ];
     }
 
     protected function tearDown(): void
@@ -31,11 +42,9 @@ final class ConfigFileGeneratorTest extends TestCase
     #[Test]
     public function it_generates_config_file(): void
     {
-        $classes = [
-            new ScannedClass(SampleConfig::class, Scope::SINGLETON, [], [], 'sample', 'test/pkg'),
-        ];
+        $classes = [$this->configClass()];
 
-        $generated = $this->generator->generate($classes, $this->tmpDir);
+        $generated = $this->generator->generate($classes, $this->packages, $this->tmpDir);
 
         self::assertCount(1, $generated);
         self::assertFileExists($this->tmpDir . '/sample.php');
@@ -44,14 +53,9 @@ final class ConfigFileGeneratorTest extends TestCase
     #[Test]
     public function it_contains_parameter_keys_with_defaults(): void
     {
-        $classes = [
-            new ScannedClass(SampleConfig::class, Scope::SINGLETON, [], [], 'sample', 'test/pkg'),
-        ];
+        $this->generator->generate([$this->configClass()], $this->packages, $this->tmpDir);
 
-        $this->generator->generate($classes, $this->tmpDir);
-
-        $content = file_get_contents($this->tmpDir . '/sample.php');
-        self::assertIsString($content);
+        $content = $this->readGenerated('sample.php');
         self::assertStringContainsString("'name' => 'default'", $content);
         self::assertStringContainsString("'port' => 3000", $content);
         self::assertStringContainsString("'debug' => false", $content);
@@ -59,33 +63,116 @@ final class ConfigFileGeneratorTest extends TestCase
     }
 
     #[Test]
-    public function it_contains_type_comments(): void
+    public function it_uses_phpdoc_descriptions_not_type_names(): void
     {
-        $classes = [
-            new ScannedClass(SampleConfig::class, Scope::SINGLETON, [], [], 'sample', 'test/pkg'),
-        ];
+        $this->generator->generate([$this->configClass()], $this->packages, $this->tmpDir);
 
-        $this->generator->generate($classes, $this->tmpDir);
+        $content = $this->readGenerated('sample.php');
+        self::assertStringContainsString('Application name', $content);
+        self::assertStringContainsString('Server port number', $content);
+        self::assertStringContainsString('Enable debug mode', $content);
+        self::assertStringContainsString('Resource tags', $content);
+        self::assertStringNotContainsString('// (string)', $content);
+        self::assertStringNotContainsString('// (int)', $content);
+    }
 
-        $content = file_get_contents($this->tmpDir . '/sample.php');
-        self::assertIsString($content);
-        self::assertStringContainsString('(string)', $content);
-        self::assertStringContainsString('(int)', $content);
-        self::assertStringContainsString('(bool)', $content);
-        self::assertStringContainsString('(array)', $content);
+    #[Test]
+    public function it_uses_docblock_comments(): void
+    {
+        $this->generator->generate([$this->configClass()], $this->packages, $this->tmpDir);
+
+        $content = $this->readGenerated('sample.php');
+        self::assertStringContainsString('/**', $content);
+        self::assertStringContainsString('*/', $content);
+        self::assertStringNotContainsString('// (', $content);
+    }
+
+    #[Test]
+    public function it_has_professional_docblock_header(): void
+    {
+        $this->generator->generate([$this->configClass()], $this->packages, $this->tmpDir);
+
+        $content = $this->readGenerated('sample.php');
+        self::assertStringContainsString('@package     test/pkg', $content);
+        self::assertStringContainsString('@author      Test Author <test@example.com>', $content);
+        self::assertStringContainsString('@see         https://github.com/test/pkg', $content);
+        self::assertStringContainsString('@generated   phpdot/package', $content);
+    }
+
+    #[Test]
+    public function it_includes_package_description_in_header(): void
+    {
+        $this->generator->generate([$this->configClass()], $this->packages, $this->tmpDir);
+
+        $content = $this->readGenerated('sample.php');
+        self::assertStringContainsString('A test package for unit testing.', $content);
+    }
+
+    #[Test]
+    public function it_includes_cli_commands_in_header(): void
+    {
+        $this->generator->generate([$this->configClass()], $this->packages, $this->tmpDir);
+
+        $content = $this->readGenerated('sample.php');
+        self::assertStringContainsString('php dot config:show sample', $content);
+        self::assertStringContainsString('php dot config:reset sample', $content);
+    }
+
+    #[Test]
+    public function it_includes_ownership_notice(): void
+    {
+        $this->generator->generate([$this->configClass()], $this->packages, $this->tmpDir);
+
+        $content = $this->readGenerated('sample.php');
+        self::assertStringContainsString('You own this file', $content);
+        self::assertStringContainsString('never be overwritten', $content);
+    }
+
+    #[Test]
+    public function it_includes_environment_override_block(): void
+    {
+        $this->generator->generate([$this->configClass()], $this->packages, $this->tmpDir);
+
+        $content = $this->readGenerated('sample.php');
+        self::assertStringContainsString('Environment overrides', $content);
+        self::assertStringContainsString("'development'", $content);
+        self::assertStringContainsString("'production'", $content);
+        self::assertStringContainsString("'staging'", $content);
+    }
+
+    #[Test]
+    public function it_prefills_development_debug_override(): void
+    {
+        $this->generator->generate([$this->configClass()], $this->packages, $this->tmpDir);
+
+        $content = $this->readGenerated('sample.php');
+        self::assertStringContainsString("'debug' => true", $content);
+    }
+
+    #[Test]
+    public function it_uses_configurable_environments(): void
+    {
+        $this->generator->generate(
+            [$this->configClass()],
+            $this->packages,
+            $this->tmpDir,
+            ['local', 'production'],
+        );
+
+        $content = $this->readGenerated('sample.php');
+        self::assertStringContainsString("'local'", $content);
+        self::assertStringContainsString("'production'", $content);
+        self::assertStringNotContainsString("'development'", $content);
+        self::assertStringNotContainsString("'staging'", $content);
     }
 
     #[Test]
     public function it_skips_existing_config_files(): void
     {
-        mkdir($this->tmpDir, 0755, true);
+        mkdir($this->tmpDir, 0o755, true);
         file_put_contents($this->tmpDir . '/sample.php', '<?php return [];');
 
-        $classes = [
-            new ScannedClass(SampleConfig::class, Scope::SINGLETON, [], [], 'sample', 'test/pkg'),
-        ];
-
-        $generated = $this->generator->generate($classes, $this->tmpDir);
+        $generated = $this->generator->generate([$this->configClass()], $this->packages, $this->tmpDir);
 
         self::assertSame([], $generated);
 
@@ -100,34 +187,26 @@ final class ConfigFileGeneratorTest extends TestCase
             new ScannedClass('App\\Svc', Scope::SINGLETON, [], [], null, 'test/pkg'),
         ];
 
-        $generated = $this->generator->generate($classes, $this->tmpDir);
+        $generated = $this->generator->generate($classes, $this->packages, $this->tmpDir);
 
         self::assertSame([], $generated);
     }
 
     #[Test]
-    public function it_includes_package_and_class_in_header(): void
+    public function it_creates_config_directory(): void
     {
-        $classes = [
-            new ScannedClass(SampleConfig::class, Scope::SINGLETON, [], [], 'sample', 'test/pkg'),
-        ];
+        $deepDir = $this->tmpDir . '/nested/config';
 
-        $this->generator->generate($classes, $this->tmpDir);
+        $this->generator->generate([$this->configClass()], $this->packages, $deepDir);
 
-        $content = file_get_contents($this->tmpDir . '/sample.php');
-        self::assertIsString($content);
-        self::assertStringContainsString('test/pkg', $content);
-        self::assertStringContainsString('SampleConfig', $content);
+        self::assertDirectoryExists($deepDir);
+        self::assertFileExists($deepDir . '/sample.php');
     }
 
     #[Test]
     public function it_generates_valid_php(): void
     {
-        $classes = [
-            new ScannedClass(SampleConfig::class, Scope::SINGLETON, [], [], 'sample', 'test/pkg'),
-        ];
-
-        $this->generator->generate($classes, $this->tmpDir);
+        $this->generator->generate([$this->configClass()], $this->packages, $this->tmpDir);
 
         /** @var array<string, mixed> $result */
         $result = require $this->tmpDir . '/sample.php';
@@ -140,132 +219,74 @@ final class ConfigFileGeneratorTest extends TestCase
     }
 
     #[Test]
-    public function it_creates_config_directory(): void
+    public function it_falls_back_to_humanized_name_when_no_phpdoc(): void
     {
-        $deepDir = $this->tmpDir . '/nested/config';
+        $class = new ScannedClass(
+            SampleConfig::class,
+            Scope::SINGLETON,
+            [],
+            [],
+            'sample',
+            'test/pkg',
+            [],
+        );
 
-        $classes = [
-            new ScannedClass(SampleConfig::class, Scope::SINGLETON, [], [], 'sample', 'test/pkg'),
-        ];
+        $this->generator->generate([$class], $this->packages, $this->tmpDir);
 
-        $this->generator->generate($classes, $deepDir);
-
-        self::assertDirectoryExists($deepDir);
-        self::assertFileExists($deepDir . '/sample.php');
+        $content = $this->readGenerated('sample.php');
+        self::assertStringContainsString('Name', $content);
+        self::assertStringContainsString('Port', $content);
     }
 
     #[Test]
-    public function it_includes_service_list_in_hint(): void
+    public function it_does_not_include_service_hint_block(): void
     {
         $classes = [
-            new ScannedClass(SampleConfig::class, Scope::SINGLETON, [], [], 'sample', 'test/pkg'),
-            new ScannedClass('PHPdot\\Package\\Tests\\Fixtures\\SimpleService', Scope::SINGLETON, [], [], null, 'test/pkg'),
-            new ScannedClass('PHPdot\\Package\\Tests\\Fixtures\\SampleService', Scope::SCOPED, [SampleInterface::class, SampleConfig::class], [], null, 'test/pkg'),
+            $this->configClass(),
+            new ScannedClass('App\\Svc', Scope::SCOPED, [], [], null, 'test/pkg'),
         ];
 
-        $this->generator->generate($classes, $this->tmpDir);
+        $this->generator->generate($classes, $this->packages, $this->tmpDir);
 
-        $content = file_get_contents($this->tmpDir . '/sample.php');
-        self::assertIsString($content);
-        self::assertStringContainsString('Services:', $content);
-        self::assertStringContainsString('SampleConfig', $content);
-        self::assertStringContainsString('SimpleService', $content);
-        self::assertStringContainsString('SampleService', $content);
+        $content = $this->readGenerated('sample.php');
+        self::assertStringNotContainsString('Services:', $content);
+        self::assertStringNotContainsString('container/services.php', $content);
     }
 
     #[Test]
-    public function it_includes_scope_per_service(): void
+    public function it_works_without_package_meta(): void
     {
-        $classes = [
-            new ScannedClass(SampleConfig::class, Scope::SINGLETON, [], [], 'sample', 'test/pkg'),
-            new ScannedClass('PHPdot\\Package\\Tests\\Fixtures\\SampleService', Scope::SCOPED, [], [], null, 'test/pkg'),
-        ];
+        $this->generator->generate([$this->configClass()], [], $this->tmpDir);
 
-        $this->generator->generate($classes, $this->tmpDir);
-
-        $content = file_get_contents($this->tmpDir . '/sample.php');
-        self::assertIsString($content);
-        self::assertStringContainsString('singleton', $content);
-        self::assertStringContainsString('scoped', $content);
+        $content = $this->readGenerated('sample.php');
+        self::assertStringContainsString('test/pkg', $content);
+        self::assertStringContainsString('@package', $content);
     }
 
-    #[Test]
-    public function it_includes_binding_info(): void
+    private function configClass(): ScannedClass
     {
-        $classes = [
-            new ScannedClass(SampleConfig::class, Scope::SINGLETON, [], [], 'sample', 'test/pkg'),
-            new ScannedClass('PHPdot\\Package\\Tests\\Fixtures\\SampleLoader', Scope::SINGLETON, [SampleConfig::class], [SampleInterface::class], null, 'test/pkg'),
-        ];
-
-        $this->generator->generate($classes, $this->tmpDir);
-
-        $content = file_get_contents($this->tmpDir . '/sample.php');
-        self::assertIsString($content);
-        self::assertStringContainsString('binds SampleInterface', $content);
+        return new ScannedClass(
+            SampleConfig::class,
+            Scope::SINGLETON,
+            [],
+            [],
+            'sample',
+            'test/pkg',
+            [
+                'name' => 'Application name',
+                'port' => 'Server port number',
+                'debug' => 'Enable debug mode',
+                'tags' => 'Resource tags',
+            ],
+        );
     }
 
-    #[Test]
-    public function it_includes_override_example(): void
+    private function readGenerated(string $filename): string
     {
-        $classes = [
-            new ScannedClass(SampleConfig::class, Scope::SINGLETON, [], [], 'sample', 'test/pkg'),
-            new ScannedClass('PHPdot\\Package\\Tests\\Fixtures\\SampleLoader', Scope::SINGLETON, [], [SampleInterface::class], null, 'test/pkg'),
-        ];
-
-        $this->generator->generate($classes, $this->tmpDir);
-
-        $content = file_get_contents($this->tmpDir . '/sample.php');
+        $content = file_get_contents($this->tmpDir . '/' . $filename);
         self::assertIsString($content);
-        self::assertStringContainsString('container/services.php', $content);
-        self::assertStringContainsString('SampleInterface::class', $content);
-    }
 
-    #[Test]
-    public function it_includes_contextual_binding_example(): void
-    {
-        $classes = [
-            new ScannedClass(SampleConfig::class, Scope::SINGLETON, [], [], 'sample', 'test/pkg'),
-            new ScannedClass('PHPdot\\Package\\Tests\\Fixtures\\SampleService', Scope::SCOPED, [SampleInterface::class, SampleConfig::class], [], null, 'test/pkg'),
-        ];
-
-        $this->generator->generate($classes, $this->tmpDir);
-
-        $content = file_get_contents($this->tmpDir . '/sample.php');
-        self::assertIsString($content);
-        self::assertStringContainsString('container/bindings.php', $content);
-        self::assertStringContainsString('->needs(', $content);
-        self::assertStringContainsString('->provide(', $content);
-    }
-
-    #[Test]
-    public function it_uses_short_class_names_in_hints(): void
-    {
-        $classes = [
-            new ScannedClass(SampleConfig::class, Scope::SINGLETON, [], [], 'sample', 'test/pkg'),
-            new ScannedClass('PHPdot\\Package\\Tests\\Fixtures\\SampleLoader', Scope::SINGLETON, [SampleConfig::class], [SampleInterface::class], null, 'test/pkg'),
-        ];
-
-        $this->generator->generate($classes, $this->tmpDir);
-
-        $content = file_get_contents($this->tmpDir . '/sample.php');
-        self::assertIsString($content);
-        self::assertStringContainsString('SampleLoader', $content);
-        self::assertStringNotContainsString('PHPdot\\Package\\Tests\\Fixtures\\SampleLoader', $content);
-    }
-
-    #[Test]
-    public function it_generates_config_with_no_siblings(): void
-    {
-        $classes = [
-            new ScannedClass(SampleConfig::class, Scope::SINGLETON, [], [], 'sample', 'lonely/pkg'),
-        ];
-
-        $this->generator->generate($classes, $this->tmpDir);
-
-        $content = file_get_contents($this->tmpDir . '/sample.php');
-        self::assertIsString($content);
-        self::assertStringContainsString('Services:', $content);
-        self::assertStringContainsString('return [', $content);
+        return $content;
     }
 
     private function removeDir(string $dir): void

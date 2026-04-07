@@ -24,21 +24,18 @@ final class PackageScanner
 {
     private const string CONTAINER_PACKAGE = 'phpdot/container';
 
-    /**
-     * @return list<ScannedClass>
-     */
-    public function scan(string $vendorPath): array
+    public function scan(string $vendorPath): ScanResult
     {
         $installedPath = $vendorPath . '/composer/installed.json';
 
         if (!is_file($installedPath)) {
-            return [];
+            return new ScanResult([], []);
         }
 
         $content = file_get_contents($installedPath);
 
         if ($content === false) {
-            return [];
+            return new ScanResult([], []);
         }
 
         /** @var array<string, mixed> $installed */
@@ -50,6 +47,7 @@ final class PackageScanner
             : [];
 
         $results = [];
+        $packagesMeta = [];
 
         foreach ($packages as $meta) {
             $name = $meta['name'] ?? null;
@@ -67,6 +65,8 @@ final class PackageScanner
             if (!isset($require[self::CONTAINER_PACKAGE]) && !isset($requireDev[self::CONTAINER_PACKAGE])) {
                 continue;
             }
+
+            $packagesMeta[$name] = $this->extractMeta($name, $meta);
 
             $installPath = $meta['install-path'] ?? null;
             if (!is_string($installPath)) {
@@ -104,7 +104,7 @@ final class PackageScanner
             }
         }
 
-        return $results;
+        return new ScanResult($results, $packagesMeta);
     }
 
     /**
@@ -163,6 +163,8 @@ final class PackageScanner
         $configAttrs = $ref->getAttributes(Config::class);
         $configName = $configAttrs !== [] ? $configAttrs[0]->newInstance()->name : null;
 
+        $paramDescriptions = $configName !== null ? $this->parseParamDescriptions($ref) : [];
+
         return new ScannedClass(
             class: $class,
             scope: $scope,
@@ -170,6 +172,7 @@ final class PackageScanner
             binds: $binds,
             configName: $configName,
             package: $package,
+            paramDescriptions: $paramDescriptions,
         );
     }
 
@@ -228,6 +231,73 @@ final class PackageScanner
         }
 
         return $params;
+    }
+
+    /**
+     * Parse @param descriptions from a constructor's docblock.
+     *
+     * @param ReflectionClass<object> $ref
+     * @return array<string, string> Parameter name => description
+     */
+    private function parseParamDescriptions(ReflectionClass $ref): array
+    {
+        $constructor = $ref->getConstructor();
+
+        if ($constructor === null) {
+            return [];
+        }
+
+        $doc = $constructor->getDocComment();
+
+        if ($doc === false) {
+            return [];
+        }
+
+        $descriptions = [];
+
+        preg_match_all(
+            '/@param\s+\S+\s+\$(\w+)\s+(.+)/m',
+            $doc,
+            $matches,
+            PREG_SET_ORDER,
+        );
+
+        foreach ($matches as $match) {
+            $descriptions[$match[1]] = trim($match[2]);
+        }
+
+        return $descriptions;
+    }
+
+    /**
+     * @param array<string, mixed> $meta
+     */
+    private function extractMeta(string $name, array $meta): PackageMeta
+    {
+        $description = is_string($meta['description'] ?? null) ? $meta['description'] : '';
+
+        $url = '';
+        $support = $meta['support'] ?? [];
+        if (is_array($support) && is_string($support['source'] ?? null)) {
+            $url = $support['source'];
+        } elseif (is_string($meta['homepage'] ?? null)) {
+            $url = $meta['homepage'];
+        }
+
+        $author = '';
+        $authors = $meta['authors'] ?? [];
+        if (is_array($authors) && isset($authors[0]) && is_array($authors[0])) {
+            $authorName = is_string($authors[0]['name'] ?? null) ? $authors[0]['name'] : '';
+            $authorEmail = is_string($authors[0]['email'] ?? null) ? $authors[0]['email'] : '';
+            $author = $authorEmail !== '' ? "{$authorName} <{$authorEmail}>" : $authorName;
+        }
+
+        return new PackageMeta(
+            name: $name,
+            description: $description,
+            url: $url,
+            author: $author,
+        );
     }
 
     /**

@@ -6,6 +6,7 @@ namespace PHPdot\Package\Tests\Generator;
 
 use PHPdot\Container\Scope;
 use PHPdot\Package\Generator\ManifestGenerator;
+use PHPdot\Package\Scanner\PackageMeta;
 use PHPdot\Package\Scanner\ScannedClass;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -90,5 +91,50 @@ final class ManifestGeneratorTest extends TestCase
         self::assertStringContainsString('return [', $output);
         $tokens = token_get_all($output);
         self::assertNotEmpty($tokens);
+    }
+
+    #[Test]
+    public function it_has_professional_header(): void
+    {
+        $output = $this->generator->generate([]);
+
+        self::assertStringContainsString('PHPdot Package Manifest', $output);
+        self::assertStringContainsString('@generated   phpdot/package', $output);
+        self::assertStringContainsString('@date', $output);
+        self::assertStringContainsString('Do not edit', $output);
+    }
+
+    #[Test]
+    public function it_includes_package_description(): void
+    {
+        $packages = [
+            'app/pkg' => new PackageMeta(
+                name: 'app/pkg',
+                description: 'My awesome package.',
+                url: 'https://github.com/app/pkg',
+                author: 'Test <test@example.com>',
+            ),
+        ];
+
+        $output = $this->generator->generate([
+            new ScannedClass('App\\Svc', Scope::SINGLETON, [], [], null, 'app/pkg'),
+        ], $packages);
+
+        self::assertStringContainsString('My awesome package.', $output);
+        self::assertStringContainsString('https://github.com/app/pkg', $output);
+        self::assertStringContainsString('Test <test@example.com>', $output);
+    }
+
+    #[Test]
+    public function it_uses_hand_formatted_output(): void
+    {
+        $output = $this->generator->generate([
+            new ScannedClass('App\\Svc', Scope::SINGLETON, [], [], null, 'app/pkg'),
+        ]);
+
+        self::assertStringNotContainsString('array (', $output);
+        self::assertStringContainsString("'services' => [", $output);
+        self::assertStringContainsString("'configs' => [", $output);
+        self::assertStringContainsString("'bindings' => [", $output);
     }
 }

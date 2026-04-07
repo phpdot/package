@@ -12,6 +12,5 @@ final class SampleService
     public function __construct(
         private readonly SampleInterface $loader,
         private readonly SampleConfig $config,
-    ) {
-    }
+    ) {}
 }
