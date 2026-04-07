@@ -7,6 +7,4 @@ namespace PHPdot\Package\Tests\Fixtures;
 use PHPdot\Container\Attribute\Singleton;
 
 #[Singleton]
-abstract class AbstractService
-{
-}
+abstract class AbstractService {}

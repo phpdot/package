@@ -19,6 +19,7 @@ final readonly class RebuildResult
      * @param int $bindingCount Interface bindings
      * @param int $configCount Config DTOs found
      * @param list<string> $generatedConfigs Paths of newly generated config files
+     * @param list<string> $generatedBindings Paths of newly generated binding files
      */
     public function __construct(
         public int $packageCount,
@@ -26,6 +27,6 @@ final readonly class RebuildResult
         public int $bindingCount,
         public int $configCount,
         public array $generatedConfigs,
-    ) {
-    }
+        public array $generatedBindings,
+    ) {}
 }

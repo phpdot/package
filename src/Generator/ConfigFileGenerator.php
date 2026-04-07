@@ -11,23 +11,25 @@ declare(strict_types=1);
 
 namespace PHPdot\Package\Generator;
 
+use PHPdot\Package\Scanner\PackageMeta;
 use PHPdot\Package\Scanner\ScannedClass;
 use ReflectionClass;
 
 final class ConfigFileGenerator
 {
     /**
-     * @param list<ScannedClass> $classes All scanned classes (grouped internally)
+     * @param list<ScannedClass> $classes All scanned classes
+     * @param array<string, PackageMeta> $packages Package metadata
+     * @param string $configPath Absolute path to config directory
+     * @param list<string> $environments Environment names for override blocks
      * @return list<string> Generated file paths
      */
-    public function generate(array $classes, string $configPath): array
-    {
-        $byPackage = [];
-
-        foreach ($classes as $scanned) {
-            $byPackage[$scanned->package][] = $scanned;
-        }
-
+    public function generate(
+        array $classes,
+        array $packages,
+        string $configPath,
+        array $environments = ['development', 'production', 'staging'],
+    ): array {
         $generated = [];
 
         foreach ($classes as $scanned) {
@@ -42,11 +44,11 @@ final class ConfigFileGenerator
             }
 
             if (!is_dir($configPath)) {
-                mkdir($configPath, 0755, true);
+                mkdir($configPath, 0o755, true);
             }
 
-            $siblings = $byPackage[$scanned->package] ?? [];
-            $content = $this->generateFile($scanned, $siblings);
+            $meta = $packages[$scanned->package] ?? new PackageMeta(name: $scanned->package);
+            $content = $this->generateFile($scanned, $meta, $environments);
             file_put_contents($filePath, $content);
             $generated[] = $filePath;
         }
@@ -55,45 +57,67 @@ final class ConfigFileGenerator
     }
 
     /**
-     * @param list<ScannedClass> $siblings All classes from the same package
+     * @param list<string> $environments
      */
-    private function generateFile(ScannedClass $scanned, array $siblings): string
+    private function generateFile(ScannedClass $scanned, PackageMeta $meta, array $environments): string
     {
         $lines = [];
         $lines[] = "<?php\n";
-        $lines[] = "\n/**";
-        $lines[] = "\n * {$scanned->package}";
-        $lines[] = "\n *";
-
-        $hintLines = $this->generateHintBlock($siblings);
-
-        if ($hintLines !== []) {
-            foreach ($hintLines as $hint) {
-                $lines[] = "\n * {$hint}";
-            }
-
-            $lines[] = "\n *";
-        }
-
-        $lines[] = "\n * Edit values below. Auto-generated once, never overwritten.";
-        $lines[] = "\n */\n";
+        $lines[] = $this->generateHeader($scanned, $meta);
         $lines[] = "\nreturn [\n";
 
         $ref = new ReflectionClass($scanned->class);
         $constructor = $ref->getConstructor();
 
+        $devOverrides = [];
+
         if ($constructor !== null) {
             foreach ($constructor->getParameters() as $param) {
                 $name = $param->getName();
-                $type = $param->getType();
-                $typeName = $type instanceof \ReflectionNamedType ? $type->getName() : 'mixed';
+
+                $description = $scanned->paramDescriptions[$name]
+                    ?? $this->humanize($name);
 
                 $default = $param->isDefaultValueAvailable()
                     ? $this->formatDefault($param->getDefaultValue())
                     : "''";
 
-                $lines[] = "    // ({$typeName})\n";
-                $lines[] = "    '{$name}' => {$default},\n\n";
+                $lines[] = "\n    /**\n";
+                $lines[] = "     * {$description}\n";
+                $lines[] = "     */\n";
+                $lines[] = "    '{$name}' => {$default},\n";
+
+                $devOverride = $this->devOverride($name);
+
+                if ($devOverride !== null) {
+                    $devOverrides[$name] = $devOverride;
+                }
+            }
+        }
+
+        if ($environments !== []) {
+            $lines[] = "\n    /**\n";
+            $lines[] = "     * Environment overrides\n";
+            $lines[] = "     *\n";
+            $lines[] = "     * Values are merged on top of defaults based on the active environment.\n";
+            $lines[] = "     * Handled automatically by phpdot/config.\n";
+            $lines[] = "     */\n";
+
+            foreach ($environments as $env) {
+                if ($env === 'development' && $devOverrides !== []) {
+                    $lines[] = "    '{$env}' => [\n";
+
+                    foreach ($devOverrides as $key => $value) {
+                        $lines[] = "        '{$key}' => {$value},\n";
+                    }
+
+                    $lines[] = "    ],\n";
+                } else {
+                    $lines[] = "    '{$env}' => [\n";
+                    $lines[] = "    ],\n";
+                }
+
+                $lines[] = "\n";
             }
         }
 
@@ -102,84 +126,61 @@ final class ConfigFileGenerator
         return implode('', $lines);
     }
 
-    /**
-     * @param list<ScannedClass> $siblings
-     * @return list<string>
-     */
-    private function generateHintBlock(array $siblings): array
+    private function generateHeader(ScannedClass $scanned, PackageMeta $meta): string
     {
         $lines = [];
-        $lines[] = 'Services:';
+        $lines[] = "\n/**";
 
-        foreach ($siblings as $sibling) {
-            $short = $this->shortName($sibling->class);
-            $scope = strtolower($sibling->scope->name);
-            $parts = $short . str_repeat(' ', max(1, 22 - strlen($short))) . $scope;
+        $lines[] = "\n * {$scanned->package}";
 
-            if ($sibling->params !== []) {
-                $paramNames = array_map($this->shortName(...), $sibling->params);
-                $parts .= '     (' . implode(', ', $paramNames) . ')';
-            }
-
-            foreach ($sibling->binds as $interface) {
-                $parts .= '  → binds ' . $this->shortName($interface);
-            }
-
-            $lines[] = '  ' . $parts;
+        if ($meta->description !== '') {
+            $lines[] = "\n * {$meta->description}";
         }
 
-        $bindings = [];
+        $lines[] = "\n *";
+        $lines[] = "\n * @package     {$scanned->package}";
 
-        foreach ($siblings as $sibling) {
-            foreach ($sibling->binds as $interface) {
-                $bindings[] = [
-                    'interface' => $interface,
-                    'short' => $this->shortName($interface),
-                ];
-            }
+        if ($meta->author !== '') {
+            $lines[] = "\n * @author      {$meta->author}";
         }
 
-        if ($bindings !== []) {
-            $lines[] = '';
-            $lines[] = 'Override in container/services.php:';
-
-            foreach ($bindings as $b) {
-                $lines[] = "  {$b['short']}::class => singleton(fn (\$c) => new YourImpl(...))";
-            }
+        if ($meta->url !== '') {
+            $lines[] = "\n * @see         {$meta->url}";
         }
 
-        $interfaceParams = [];
+        $lines[] = "\n * @generated   phpdot/package";
+        $lines[] = "\n *";
+        $lines[] = "\n * This file was auto-generated by phpdot/package.";
+        $lines[] = "\n * You own this file — edit freely. It will never be overwritten.";
+        $lines[] = "\n *";
+        $lines[] = "\n * Commands:";
+        $lines[] = "\n *   php dot config:show {$scanned->configName}         Show original defaults";
+        $lines[] = "\n *   php dot config:reset {$scanned->configName}        Reset to defaults";
+        $lines[] = "\n */\n";
 
-        foreach ($siblings as $sibling) {
-            if ($sibling->configName !== null) {
-                continue;
-            }
-
-            foreach ($sibling->params as $param) {
-                if (interface_exists($param) && !in_array($param, $interfaceParams, true)) {
-                    $interfaceParams[] = $param;
-                }
-            }
-        }
-
-        if ($interfaceParams !== []) {
-            $lines[] = '';
-            $lines[] = 'Contextual binding in container/bindings.php:';
-
-            foreach ($interfaceParams as $iface) {
-                $short = $this->shortName($iface);
-                $lines[] = "  \$builder->when(Consumer::class)->needs({$short}::class)->provide(YourImpl::class);";
-            }
-        }
-
-        return $lines;
+        return implode('', $lines);
     }
 
-    private function shortName(string $fqcn): string
+    private function devOverride(string $name): ?string
     {
-        $pos = strrpos($fqcn, '\\');
+        $lower = strtolower($name);
 
-        return $pos !== false ? substr($fqcn, $pos + 1) : $fqcn;
+        if (str_contains($lower, 'ttl') || str_contains($lower, 'cache') || str_contains($lower, 'timeout')) {
+            return '0';
+        }
+
+        if (str_contains($lower, 'debug')) {
+            return 'true';
+        }
+
+        return null;
+    }
+
+    private function humanize(string $name): string
+    {
+        $words = str_replace('_', ' ', $name);
+
+        return ucfirst($words);
     }
 
     private function formatDefault(mixed $value): string
@@ -217,7 +218,7 @@ final class ConfigFileGenerator
         }
 
         if (array_is_list($value)) {
-            $items = array_map(fn (mixed $v): string => $this->formatDefault($v), $value);
+            $items = array_map(fn(mixed $v): string => $this->formatDefault($v), $value);
 
             return '[' . implode(', ', $items) . ']';
         }

@@ -28,9 +28,11 @@ final class ComposerScript
         $extra = $composer->getPackage()->getExtra();
         $phpdot = is_array($extra['phpdot'] ?? null) ? $extra['phpdot'] : [];
         $configDir = is_string($phpdot['config-dir'] ?? null) ? $phpdot['config-dir'] : 'config';
+        $containerDir = is_string($phpdot['container-dir'] ?? null) ? $phpdot['container-dir'] : 'container';
         $configPath = $basePath . '/' . $configDir;
+        $containerPath = $basePath . '/' . $containerDir;
 
-        $manager = new PackageManager($vendorDir, $configPath);
+        $manager = new PackageManager($vendorDir, $configPath, $containerPath);
         $result = $manager->rebuild();
 
         $io = $event->getIO();
@@ -45,6 +47,11 @@ final class ComposerScript
         ));
 
         foreach ($result->generatedConfigs as $path) {
+            $relative = str_replace($basePath . '/', '', $path);
+            $io->write(sprintf('<info>phpdot/package:</info> generated %s', $relative));
+        }
+
+        foreach ($result->generatedBindings as $path) {
             $relative = str_replace($basePath . '/', '', $path);
             $io->write(sprintf('<info>phpdot/package:</info> generated %s', $relative));
         }

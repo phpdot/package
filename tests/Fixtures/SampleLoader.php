@@ -13,6 +13,5 @@ final class SampleLoader implements SampleInterface
 {
     public function __construct(
         private readonly SampleConfig $config,
-    ) {
-    }
+    ) {}
 }

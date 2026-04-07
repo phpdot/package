@@ -20,8 +20,7 @@ final readonly class Manifest
     public function __construct(
         public array $packages,
         public string $generatedAt,
-    ) {
-    }
+    ) {}
 
     /**
      * @return list<string>

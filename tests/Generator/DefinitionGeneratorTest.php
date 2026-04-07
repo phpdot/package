@@ -6,6 +6,7 @@ namespace PHPdot\Package\Tests\Generator;
 
 use PHPdot\Container\Scope;
 use PHPdot\Package\Generator\DefinitionGenerator;
+use PHPdot\Package\Scanner\PackageMeta;
 use PHPdot\Package\Scanner\ScannedClass;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -135,5 +136,40 @@ final class DefinitionGeneratorTest extends TestCase
 
         $tokens = token_get_all($output);
         self::assertNotEmpty($tokens);
+    }
+
+    #[Test]
+    public function it_has_professional_header(): void
+    {
+        $output = $this->generator->generate([
+            new ScannedClass('App\\Svc', Scope::SINGLETON, [], [], null, 'app/pkg'),
+        ]);
+
+        self::assertStringContainsString('PHPdot Container Definitions', $output);
+        self::assertStringContainsString('@generated   phpdot/package', $output);
+        self::assertStringContainsString('@date', $output);
+        self::assertStringContainsString('Do not edit', $output);
+    }
+
+    #[Test]
+    public function it_uses_docblock_section_headers(): void
+    {
+        $packages = [
+            'vendor/alpha' => new PackageMeta(
+                name: 'vendor/alpha',
+                description: 'Alpha package description.',
+                url: 'https://github.com/vendor/alpha',
+            ),
+        ];
+
+        $output = $this->generator->generate([
+            new ScannedClass('Vendor\\A', Scope::SINGLETON, [], [], null, 'vendor/alpha'),
+        ], $packages);
+
+        self::assertStringContainsString('/**', $output);
+        self::assertStringContainsString('vendor/alpha', $output);
+        self::assertStringContainsString('Alpha package description.', $output);
+        self::assertStringContainsString('@see https://github.com/vendor/alpha', $output);
+        self::assertStringNotContainsString('// ───', $output);
     }
 }
