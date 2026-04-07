@@ -42,9 +42,7 @@ final class ConfigFileGeneratorTest extends TestCase
     #[Test]
     public function it_generates_config_file(): void
     {
-        $classes = [$this->configClass()];
-
-        $generated = $this->generator->generate($classes, $this->packages, $this->tmpDir);
+        $generated = $this->generator->generate([$this->configClass()], $this->packages, $this->tmpDir);
 
         self::assertCount(1, $generated);
         self::assertFileExists($this->tmpDir . '/sample.php');
@@ -88,15 +86,25 @@ final class ConfigFileGeneratorTest extends TestCase
     }
 
     #[Test]
+    public function it_has_declare_strict_types(): void
+    {
+        $this->generator->generate([$this->configClass()], $this->packages, $this->tmpDir);
+
+        $content = $this->readGenerated('sample.php');
+        self::assertStringContainsString('declare(strict_types=1);', $content);
+    }
+
+    #[Test]
     public function it_has_professional_docblock_header(): void
     {
         $this->generator->generate([$this->configClass()], $this->packages, $this->tmpDir);
 
         $content = $this->readGenerated('sample.php');
         self::assertStringContainsString('@package     test/pkg', $content);
-        self::assertStringContainsString('@author      Test Author <test@example.com>', $content);
         self::assertStringContainsString('@see         https://github.com/test/pkg', $content);
+        self::assertStringContainsString('@see         phpdot/config', $content);
         self::assertStringContainsString('@generated   phpdot/package', $content);
+        self::assertStringNotContainsString('@author', $content);
     }
 
     #[Test]
@@ -114,8 +122,8 @@ final class ConfigFileGeneratorTest extends TestCase
         $this->generator->generate([$this->configClass()], $this->packages, $this->tmpDir);
 
         $content = $this->readGenerated('sample.php');
-        self::assertStringContainsString('php dot config:show sample', $content);
-        self::assertStringContainsString('php dot config:reset sample', $content);
+        self::assertStringContainsString('php dot package:config sample', $content);
+        self::assertStringContainsString('php dot package:reset sample', $content);
     }
 
     #[Test]
@@ -124,8 +132,8 @@ final class ConfigFileGeneratorTest extends TestCase
         $this->generator->generate([$this->configClass()], $this->packages, $this->tmpDir);
 
         $content = $this->readGenerated('sample.php');
-        self::assertStringContainsString('You own this file', $content);
-        self::assertStringContainsString('never be overwritten', $content);
+        self::assertStringContainsString("This is your file", $content);
+        self::assertStringContainsString("we won't touch it", $content);
     }
 
     #[Test]
@@ -141,12 +149,14 @@ final class ConfigFileGeneratorTest extends TestCase
     }
 
     #[Test]
-    public function it_prefills_development_debug_override(): void
+    public function it_has_all_environment_blocks_empty(): void
     {
         $this->generator->generate([$this->configClass()], $this->packages, $this->tmpDir);
 
         $content = $this->readGenerated('sample.php');
-        self::assertStringContainsString("'debug' => true", $content);
+        self::assertStringContainsString("'development' => [\n    ],", $content);
+        self::assertStringContainsString("'production' => [\n    ],", $content);
+        self::assertStringContainsString("'staging' => [\n    ],", $content);
     }
 
     #[Test]
@@ -164,6 +174,16 @@ final class ConfigFileGeneratorTest extends TestCase
         self::assertStringContainsString("'production'", $content);
         self::assertStringNotContainsString("'development'", $content);
         self::assertStringNotContainsString("'staging'", $content);
+    }
+
+    #[Test]
+    public function it_has_no_blank_lines_between_config_keys(): void
+    {
+        $this->generator->generate([$this->configClass()], $this->packages, $this->tmpDir);
+
+        $content = $this->readGenerated('sample.php');
+        self::assertStringContainsString("'name' => 'default'," . "\n" . '    /**', $content);
+        self::assertStringContainsString("'port' => 3000," . "\n" . '    /**', $content);
     }
 
     #[Test]

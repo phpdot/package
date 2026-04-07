@@ -27,6 +27,7 @@ final class ManifestGenerator
 
         $lines = [];
         $lines[] = "<?php\n";
+        $lines[] = "\ndeclare(strict_types=1);\n";
         $lines[] = $this->generateHeader($timestamp);
         $lines[] = "\nreturn [\n";
         $lines[] = "\n    'generated_at' => '{$timestamp}',\n";
