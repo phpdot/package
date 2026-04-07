@@ -292,6 +292,46 @@ final class PackageScannerTest extends TestCase
         rmdir($tmpDir);
     }
 
+    #[Test]
+    public function scan_skips_excluded_packages(): void
+    {
+        $tmpDir = sys_get_temp_dir() . '/phpdot_scanner_exclude_' . uniqid();
+        mkdir($tmpDir . '/composer', 0o755, true);
+
+        $installed = [
+            'packages' => [
+                [
+                    'name' => 'phpdot/i18n',
+                    'description' => 'I18n package.',
+                    'require-dev' => ['phpdot/container' => '^1.2'],
+                    'install-path' => '../nonexistent',
+                    'autoload' => ['psr-4' => ['PHPdot\\I18n\\' => 'src/']],
+                ],
+                [
+                    'name' => 'phpdot/cache',
+                    'description' => 'Cache package.',
+                    'require-dev' => ['phpdot/container' => '^1.0'],
+                    'install-path' => '../nonexistent',
+                    'autoload' => ['psr-4' => ['PHPdot\\Cache\\' => 'src/']],
+                ],
+            ],
+        ];
+
+        file_put_contents(
+            $tmpDir . '/composer/installed.json',
+            json_encode($installed, JSON_THROW_ON_ERROR),
+        );
+
+        $result = $this->scanner->scan($tmpDir, ['phpdot/i18n']);
+
+        self::assertArrayNotHasKey('phpdot/i18n', $result->packages);
+        self::assertArrayHasKey('phpdot/cache', $result->packages);
+
+        unlink($tmpDir . '/composer/installed.json');
+        rmdir($tmpDir . '/composer');
+        rmdir($tmpDir);
+    }
+
     /**
      * @param list<\PHPdot\Package\Scanner\ScannedClass> $results
      */

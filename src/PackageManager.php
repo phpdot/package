@@ -28,6 +28,9 @@ final class PackageManager
     private readonly string $configPath;
     private readonly string $containerPath;
 
+    /** @var list<string> */
+    private readonly array $exclude;
+
     /**
      * @param string $basePath Absolute path to the project root
      * @param list<string> $environments Environment names for config override blocks
@@ -42,6 +45,7 @@ final class PackageManager
             $this->vendorPath = $basePath . '/vendor';
             $this->configPath = $basePath . '/config';
             $this->containerPath = $basePath . '/container';
+            $this->exclude = [];
 
             return;
         }
@@ -65,9 +69,14 @@ final class PackageManager
             ? $phpdot['container-dir']
             : 'container';
 
+        $exclude = $phpdot['exclude'] ?? null;
+
         $this->vendorPath = $basePath . '/' . $vendorDir;
         $this->configPath = $basePath . '/' . $configDir;
         $this->containerPath = $basePath . '/' . $containerDir;
+        $this->exclude = is_array($exclude)
+            ? array_values(array_filter($exclude, 'is_string'))
+            : [];
     }
 
     /**
@@ -94,7 +103,7 @@ final class PackageManager
     public function rebuild(): RebuildResult
     {
         $scanner = new PackageScanner();
-        $scanResult = $scanner->scan($this->vendorPath);
+        $scanResult = $scanner->scan($this->vendorPath, $this->exclude);
 
         $classes = $scanResult->classes;
         $packages = $scanResult->packages;
