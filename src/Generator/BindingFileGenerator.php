@@ -62,6 +62,37 @@ final class BindingFileGenerator
     }
 
     /**
+     * Compute every absolute path this generator owns for the given scan,
+     * regardless of whether each file already exists. Used by PackageManager
+     * to record owned files in the manifest and to detect orphans on the
+     * next rebuild.
+     *
+     * @param list<ScannedClass> $classes
+     * @return list<string>
+     */
+    public function ownedPaths(array $classes, string $containerPath): array
+    {
+        $byPackage = $this->groupByPackage($classes);
+        $bindingsDir = rtrim($containerPath, '/') . '/bindings';
+        $paths = [];
+
+        foreach ($byPackage as $packageName => $group) {
+            if (!$this->shouldGenerate($group)) {
+                continue;
+            }
+
+            $configName = $this->resolveConfigName($group)
+                ?? $this->deriveBindingName($packageName);
+
+            $paths[] = $bindingsDir . '/' . $configName . '.php';
+        }
+
+        sort($paths);
+
+        return $paths;
+    }
+
+    /**
      * @param list<ScannedClass> $group
      */
     private function shouldGenerate(array $group): bool
@@ -157,6 +188,10 @@ final class BindingFileGenerator
         $lines[] = "\n * @generated   phpdot/package";
         $lines[] = "\n *";
         $lines[] = "\n * This is your file — modify it freely, we won't touch it.";
+        $lines[] = "\n *";
+        $lines[] = "\n * Note: `composer remove {$packageName}` does NOT delete this file.";
+        $lines[] = "\n * phpdot/package will list it as orphaned on the next rebuild —";
+        $lines[] = "\n * delete it manually to clean up.";
         $lines[] = "\n *";
         $lines[] = "\n * Services registered by this package:";
         $lines[] = "\n *";

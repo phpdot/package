@@ -20,6 +20,8 @@ final readonly class RebuildResult
      * @param int $configCount Config DTOs found
      * @param list<string> $generatedConfigs Paths of newly generated config files
      * @param list<string> $generatedBindings Paths of newly generated binding files
+     * @param list<string> $orphanedConfigs Paths of config files no longer backed by an installed package
+     * @param list<string> $orphanedBindings Paths of binding files no longer backed by an installed package
      */
     public function __construct(
         public int $packageCount,
@@ -28,5 +30,7 @@ final readonly class RebuildResult
         public int $configCount,
         public array $generatedConfigs,
         public array $generatedBindings,
+        public array $orphanedConfigs = [],
+        public array $orphanedBindings = [],
     ) {}
 }

@@ -102,21 +102,36 @@ final class PackageManager
 
     public function rebuild(): RebuildResult
     {
+        // Read the previous ledger BEFORE the manifest is overwritten so we
+        // know which files this package owned on the last rebuild. Diffing
+        // against the new owned set tells us which files are now orphans.
+        $previouslyOwned = $this->readPreviouslyOwnedPaths();
+
         $scanner = new PackageScanner();
         $scanResult = $scanner->scan($this->vendorPath, $this->exclude);
 
         $classes = $scanResult->classes;
         $packages = $scanResult->packages;
 
+        $configGenerator = new ConfigFileGenerator();
+        $bindingGenerator = new BindingFileGenerator();
+
+        $ownedConfigs = $configGenerator->ownedPaths($classes, $this->configPath);
+        $ownedBindings = $bindingGenerator->ownedPaths($classes, $this->containerPath);
+
         $defGenerator = new DefinitionGenerator();
         $defContent = $defGenerator->generate($classes, $packages);
         $this->writePhpdotFile(self::DEFINITIONS_FILE, $defContent);
 
         $manifestGenerator = new ManifestGenerator();
-        $manifestContent = $manifestGenerator->generate($classes, $packages);
+        $manifestContent = $manifestGenerator->generate(
+            $classes,
+            $packages,
+            $ownedConfigs,
+            $ownedBindings,
+        );
         $this->writePhpdotFile(self::MANIFEST_FILE, $manifestContent);
 
-        $configGenerator = new ConfigFileGenerator();
         $generatedConfigs = $configGenerator->generate(
             $classes,
             $packages,
@@ -124,7 +139,6 @@ final class PackageManager
             $this->environments,
         );
 
-        $bindingGenerator = new BindingFileGenerator();
         $generatedBindings = $bindingGenerator->generate(
             $classes,
             $packages,
@@ -145,6 +159,19 @@ final class PackageManager
             $packageNames[$scanned->package] = true;
         }
 
+        $orphanedConfigs = array_values(
+            array_filter(
+                array_diff($previouslyOwned['configs'], $ownedConfigs),
+                'is_file',
+            ),
+        );
+        $orphanedBindings = array_values(
+            array_filter(
+                array_diff($previouslyOwned['bindings'], $ownedBindings),
+                'is_file',
+            ),
+        );
+
         return new RebuildResult(
             packageCount: count($packageNames),
             serviceCount: count($classes),
@@ -152,8 +179,42 @@ final class PackageManager
             configCount: $configCount,
             generatedConfigs: $generatedConfigs,
             generatedBindings: $generatedBindings,
+            orphanedConfigs: $orphanedConfigs,
+            orphanedBindings: $orphanedBindings,
         );
     }
+
+    /**
+     * Read the `ownedConfigs` and `ownedBindings` lists from the previous
+     * manifest. Returns empty arrays on first run (no manifest yet) or when
+     * the manifest predates this ledger format.
+     *
+     * @return array{configs: list<string>, bindings: list<string>}
+     */
+    private function readPreviouslyOwnedPaths(): array
+    {
+        $path = $this->phpdotDir() . '/' . self::MANIFEST_FILE;
+
+        if (!is_file($path)) {
+            return ['configs' => [], 'bindings' => []];
+        }
+
+        /** @var mixed $data */
+        $data = require $path;
+
+        if (!is_array($data)) {
+            return ['configs' => [], 'bindings' => []];
+        }
+
+        $configs = $data['ownedConfigs'] ?? [];
+        $bindings = $data['ownedBindings'] ?? [];
+
+        return [
+            'configs' => is_array($configs) ? array_values(array_filter($configs, 'is_string')) : [],
+            'bindings' => is_array($bindings) ? array_values(array_filter($bindings, 'is_string')) : [],
+        ];
+    }
+
 
     public function clear(): void
     {
