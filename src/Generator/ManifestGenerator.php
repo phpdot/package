@@ -20,13 +20,11 @@ final class ManifestGenerator
      * @param list<ScannedClass> $classes
      * @param array<string, PackageMeta> $packages
      * @param list<string> $ownedConfigs Absolute paths of config files owned by current packages
-     * @param list<string> $ownedBindings Absolute paths of binding files owned by current packages
      */
     public function generate(
         array $classes,
         array $packages = [],
         array $ownedConfigs = [],
-        array $ownedBindings = [],
     ): string {
         $grouped = $this->groupByPackage($classes);
         $timestamp = date('c');
@@ -38,7 +36,6 @@ final class ManifestGenerator
         $lines[] = "\nreturn [\n";
         $lines[] = "\n    'generated_at' => '{$timestamp}',\n";
         $lines[] = "\n    'ownedConfigs' => " . $this->formatPathList($ownedConfigs, 8) . ",\n";
-        $lines[] = "\n    'ownedBindings' => " . $this->formatPathList($ownedBindings, 8) . ",\n";
         $lines[] = "\n    'packages' => [\n";
 
         foreach ($grouped as $packageName => $group) {

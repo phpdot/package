@@ -1,8 +1,8 @@
 # phpdot/package
 
-Attribute-driven package scanning, definition generation, config scaffolding, and binding templates for PHPdot.
+Attribute-driven package scanning, definition generation, and config scaffolding for PHPdot.
 
-Scans vendor packages for container attributes (`#[Singleton]`, `#[Scoped]`, `#[Config]`, `#[Binds]`), generates cached definitions, scaffolds config files with PHPDoc descriptions and environment overrides, and creates binding templates with commented override examples.
+Scans vendor packages for container attributes (`#[Singleton]`, `#[Scoped]`, `#[Transient]`, `#[Config]`, `#[Binds]`), generates a cached container definitions file, scaffolds config files with PHPDoc descriptions and environment overrides, and ships a CLI inspector (`vendor/bin/package`) for full visibility into what's installed and what can be overridden.
 
 ---
 
@@ -36,13 +36,12 @@ composer require phpdot/i18n
 PackageScanner reads vendor/composer/installed.json
     → finds packages with phpdot/container in require or require-dev
     → extracts package metadata (description, url, author)
-    → reflects attributed classes (#[Singleton], #[Scoped], #[Config], #[Binds])
+    → reflects attributed classes (#[Singleton], #[Scoped], #[Transient], #[Config], #[Binds])
     → parses @param PHPDoc descriptions for #[Config] DTOs
     ↓
 DefinitionGenerator      → vendor/phpdot/definitions.php    (cached container definitions)
-ManifestGenerator        → vendor/phpdot/manifest.php       (package metadata)
+ManifestGenerator        → vendor/phpdot/manifest.php       (package metadata + ownedConfigs ledger)
 ConfigFileGenerator      → config/{name}.php                (once, never overwritten)
-BindingFileGenerator     → container/bindings/{name}.php    (once, never overwritten)
 ```
 
 At boot time:
@@ -65,17 +64,15 @@ my-app/
 ├── config/                   VALUES — developer edits these
 │   └── i18n.php              auto-generated from #[Config('i18n')]
 │
-├── container/                WIRING — optional, power users
-│   └── bindings/
-│       └── i18n.php          auto-generated binding overrides
-│
 └── vendor/
     └── phpdot/               auto-generated, never edited
         ├── definitions.php
         └── manifest.php
 ```
 
-`config/` for values. `container/bindings/` for DI overrides. `vendor/phpdot/` for framework internals.
+`config/` is for values. `vendor/phpdot/` is for framework internals.
+
+Override default bindings directly in your application bootstrap using `phpdot/container`'s API — `add()`, `addDefinitions()`, or `when()->needs()->provide()`. No scaffolded override files.
 
 ---
 
@@ -91,13 +88,13 @@ Override directories via `composer.json`:
     "extra": {
         "phpdot": {
             "config-dir": "settings",
-            "container-dir": "container"
+            "exclude": ["some/package"]
         }
     }
 }
 ```
 
-`PackageManager` reads `composer.json` from the base path and resolves all directories automatically. Defaults to `vendor`, `config`, and `container` when not specified. Falls back to defaults if `composer.json` is missing.
+`PackageManager` reads `composer.json` from the base path and resolves all directories automatically. Defaults: `vendor-dir` = `vendor`, `config-dir` = `config`. Falls back to defaults if `composer.json` is missing. The `exclude` list skips those packages from scanning.
 
 ---
 
@@ -121,9 +118,9 @@ declare(strict_types=1);
  *
  * This is your file — modify it freely, we won't touch it.
  *
- * Commands:
- *   php dot package:config i18n       Show original defaults
- *   php dot package:reset i18n        Reset to defaults
+ * Note: `composer remove phpdot/i18n` does NOT delete this file.
+ * phpdot/package will list it as orphaned on the next rebuild —
+ * delete it manually to clean up.
  */
 
 return [
@@ -161,79 +158,7 @@ return [
 
 Descriptions come from `@param` PHPDoc on the config DTO constructor. If no `@param` exists, the parameter name is humanized as fallback.
 
----
-
-## Generated Binding Files
-
-When a package has `#[Binds]` attributes or services with unbound interface parameters, a binding file is generated at `container/bindings/{name}.php`:
-
-```php
-<?php
-
-declare(strict_types=1);
-
-/**
- * phpdot/i18n — Container Bindings
- * Internationalization with ICU MessageFormat, pluggable loaders, PSR-16 caching.
- *
- * @package     phpdot/i18n
- * @see         https://github.com/phpdot/i18n
- * @generated   phpdot/package
- *
- * This is your file — modify it freely, we won't touch it.
- *
- * Services registered by this package:
- *
- *   I18nConfig           singleton     Config DTO, hydrated from config/i18n.php
- *   Translator           scoped        (LoaderInterface, CacheInterface, I18nConfig)
- *   ICUValidator         singleton     No dependencies
- *   PhpArrayLoader       singleton     (I18nConfig) → binds LoaderInterface
- *
- * Commands:
- *   php dot package:bindings i18n     Show original template
- *   php dot package:reset i18n        Reset to template
- */
-
-use PHPdot\Container\ContainerBuilder;
-use PHPdot\I18n\I18nConfig;
-use PHPdot\I18n\Loader\LoaderInterface;
-use PHPdot\I18n\Loader\PhpArrayLoader;
-use PHPdot\I18n\Translator;
-use Psr\SimpleCache\CacheInterface;
-
-return static function (ContainerBuilder $builder): void {
-
-    /**
-     * Override LoaderInterface
-     *
-     * Default: LoaderInterface → PhpArrayLoader
-     */
-
-    /*
-    $builder->add(LoaderInterface::class, static function ($c) {
-        return new YourImplementation(...);
-    })->singleton();
-    */
-
-    /**
-     * Contextual Bindings
-     *
-     * Translator depends on CacheInterface but this package
-     * does not register a default. Bind it here:
-     */
-
-    /*
-    $builder->when(Translator::class)
-        ->needs(CacheInterface::class)
-        ->provide(YourImplementation::class);
-    */
-
-};
-```
-
-The binding file is **not generated** if the package has no `#[Binds]` attributes and no services with unbound interface parameters.
-
-The binding name is derived from the package's `#[Config]` name, or from the second segment of the Composer package name (e.g. `phpdot/i18n` → `i18n`).
+Nested DTOs (a `#[Config]` constructor parameter typed as another DTO class) are recursively scaffolded as nested arrays with the same convention.
 
 ---
 
@@ -248,7 +173,7 @@ The `vendor/phpdot/definitions.php` file contains cached `ScopedDefinition` entr
  * PHPdot Container Definitions
  *
  * @generated   phpdot/package
- * @date        2026-04-07T15:30:00+00:00
+ * @date        2026-04-28T15:30:00+00:00
  * @see         https://github.com/phpdot/package
  *
  * Regenerated on every composer install/update/require/remove.
@@ -284,7 +209,7 @@ return [
 
 ## Generated Manifest
 
-The `vendor/phpdot/manifest.php` file contains hand-formatted package metadata:
+The `vendor/phpdot/manifest.php` file contains hand-formatted package metadata plus an `ownedConfigs` ledger used to detect orphaned config files when packages are removed:
 
 ```php
 <?php
@@ -295,7 +220,7 @@ declare(strict_types=1);
  * PHPdot Package Manifest
  *
  * @generated   phpdot/package
- * @date        2026-04-07T15:30:00+00:00
+ * @date        2026-04-28T15:30:00+00:00
  * @see         https://github.com/phpdot/package
  *
  * Regenerated on every composer install/update/require/remove.
@@ -304,7 +229,11 @@ declare(strict_types=1);
 
 return [
 
-    'generated_at' => '2026-04-07T15:30:00+00:00',
+    'generated_at' => '2026-04-28T15:30:00+00:00',
+
+    'ownedConfigs' => [
+        '/app/config/i18n.php',
+    ],
 
     'packages' => [
 
@@ -329,21 +258,94 @@ return [
 ];
 ```
 
+`ownedConfigs` is consumed on the next rebuild: any path that was owned previously but isn't owned now is reported as orphaned. The framework never deletes user-owned files automatically; the developer is shown a warning and decides whether to delete.
+
 ---
 
-## CLI Commands
+## Overriding Defaults
 
-All commands under `php dot package:`:
+Defaults from `definitions.php` can be overridden in your application bootstrap using the `phpdot/container` builder API. No scaffolded file is needed.
+
+| Scenario | API |
+|---|---|
+| Replace globally with a single binding | `$builder->add($iface, $impl)->singleton()` |
+| Replace globally with multiple bindings at once | `$builder->addDefinitions([$iface => $impl, ...])` |
+| Replace only for one specific consumer | `$builder->when($consumer)->needs($iface)->provide($impl)` |
+
+Example:
+
+```php
+use PHPdot\Container\ContainerBuilder;
+use Psr\Http\Message\ResponseFactoryInterface;
+
+$builder = new ContainerBuilder();
+
+// Default: ResponseFactoryInterface → PHPdot\Http\ResponseFactory
+// Override globally:
+$builder->add(ResponseFactoryInterface::class, fn ($c) => new MyFactory())
+    ->singleton();
+
+// Override only when AdminController asks for it:
+$builder->when(AdminController::class)
+    ->needs(ResponseFactoryInterface::class)
+    ->provide(AdminFactory::class);
+```
+
+To discover what's available to override, use the CLI inspector below.
+
+---
+
+## CLI Inspector
+
+`phpdot/package` ships a binary at `vendor/bin/package` (Composer's `bin` mechanism — installs automatically). It provides full visibility into installed packages, services, configs, and bindings by reading `vendor/phpdot/manifest.php`.
+
+```bash
+vendor/bin/package list                  # all installed phpdot packages
+vendor/bin/package show phpdot/http      # one package's full surface + override hints
+vendor/bin/package paths                 # resolved paths (root, vendor, config, manifest)
+vendor/bin/package config:list           # every config file, owner, presence
+vendor/bin/package services              # every service across all packages, scope, owner
+vendor/bin/package bindings              # every interface → implementation, owner
+```
+
+Sample output of `vendor/bin/package show phpdot/http`:
 
 ```
-php dot package:config i18n       Show original config defaults
-php dot package:bindings i18n     Show original binding template
-php dot package:reset i18n        Reset config + bindings to defaults
-php dot package:rebuild           Rescan and regenerate everything
-php dot package:clear             Delete cached definitions + manifest
-php dot package:list              List discovered packages
-php dot package:show i18n         Show package details
+phpdot/http
+Advanced HTTP library for PHP. PSR-7/17 native. Framework-agnostic.
+https://github.com/phpdot/http
+
+Services
++-----------------------------+-----------+
+| Class                       | Scope     |
++-----------------------------+-----------+
+| PHPdot\Http\ResponseFactory | SINGLETON |
+| PHPdot\Http\HttpConfig      | SINGLETON |
++-----------------------------+-----------+
+
+Configs
++------------------------+-----------------+
+| DTO                    | Config file     |
++------------------------+-----------------+
+| PHPdot\Http\HttpConfig | config/http.php |
++------------------------+-----------------+
+
+Bindings
++------------------------------------------------+-----------------------------+
+| Interface                                      | Default implementation      |
++------------------------------------------------+-----------------------------+
+| Psr\Http\Message\ResponseFactoryInterface      | PHPdot\Http\ResponseFactory |
+| Psr\Http\Message\StreamFactoryInterface        | PHPdot\Http\ResponseFactory |
+| Psr\Http\Message\UriFactoryInterface           | PHPdot\Http\ResponseFactory |
+| ...                                            | ...                         |
++------------------------------------------------+-----------------------------+
+
+How to override
+  Globally: $builder->add(ResponseFactoryInterface::class, fn ($c) => new MyImpl())->singleton();
+  Scoped to one consumer: $builder->when(MyController::class)->needs(ResponseFactoryInterface::class)->provide(MyImpl::class);
 ```
+
+Project root resolution uses Composer's `\Composer\InstalledVersions::getRootPackage()['install_path']` — no path arithmetic, no environment guessing.
 
 ---
 
@@ -358,13 +360,12 @@ $manager = new PackageManager(__DIR__);
 
 $manager->rebuild();              // scan + generate
 $manager->clear();                // delete cached files
-$manager->load($builder);        // load definitions into builder
+$manager->load($builder);         // load definitions into builder
 $manager->manifest();             // read package metadata
 
 $manager->basePath();             // /app
 $manager->vendorPath();           // /app/vendor
 $manager->configPath();           // /app/config
-$manager->containerPath();        // /app/container
 $manager->definitionsPath();      // /app/vendor/phpdot/definitions.php
 $manager->manifestPath();         // /app/vendor/phpdot/manifest.php
 ```
@@ -372,8 +373,8 @@ $manager->manifestPath();         // /app/vendor/phpdot/manifest.php
 ### Application Boot
 
 ```php
-$manager = new PackageManager(__DIR__);
-$builder = $manager->load(new ContainerBuilder());
+$manager   = new PackageManager(__DIR__);
+$builder   = $manager->load(new ContainerBuilder());
 $container = $builder->build();
 ```
 
@@ -381,12 +382,12 @@ $container = $builder->build();
 
 ```php
 $result = $manager->rebuild();
-// $result->packageCount
-// $result->serviceCount
-// $result->bindingCount
-// $result->configCount
-// $result->generatedConfigs    list<string>
-// $result->generatedBindings   list<string>
+// $result->packageCount       int
+// $result->serviceCount       int
+// $result->bindingCount       int   (number of #[Binds] declarations baked into definitions.php)
+// $result->configCount        int
+// $result->generatedConfigs   list<string>
+// $result->orphanedConfigs    list<string>   paths previously owned but no longer backed by an installed package
 ```
 
 ### Manifest
@@ -444,7 +445,7 @@ For `#[Config]` classes, the scanner parses `@param` PHPDoc descriptions from th
 | `#[Scoped]` | class | Fresh instance per request/coroutine |
 | `#[Transient]` | class | New instance every resolution |
 | `#[Config('name')]` | class | Singleton, hydrated from `config/{name}.php` via `Configuration::dto()` |
-| `#[Binds(Interface::class)]` | class | Registers as default for interface (repeatable) |
+| `#[Binds(Interface::class)]` | class | Registers as default for interface (repeatable). Bakes into `definitions.php` — no separate scaffold file. |
 
 ---
 
@@ -455,9 +456,8 @@ For `#[Config]` classes, the scanner parses `@param` PHPDoc descriptions from th
 | Definitions | `vendor/phpdot/definitions.php` | Every Composer operation | Always |
 | Manifest | `vendor/phpdot/manifest.php` | Every Composer operation | Always |
 | Config | `config/{name}.php` | Once (first install) | Never |
-| Bindings | `container/bindings/{name}.php` | Once (first install) | Never |
 
-Config and binding files are owned by the developer. They are generated once and never overwritten, even if the package is updated. Use `php dot package:reset` to regenerate from current defaults.
+Config files are owned by the developer. They are generated once and never overwritten, even if the package is updated. Removing the package from composer is reported on the next rebuild as an orphan; the developer decides whether to delete the file.
 
 ---
 
@@ -465,10 +465,18 @@ Config and binding files are owned by the developer. They are generated once and
 
 ```
 src/
+├── Cli/
+│   ├── Application.php
+│   └── Command/
+│       ├── BindingsCommand.php
+│       ├── ConfigListCommand.php
+│       ├── ListCommand.php
+│       ├── PathsCommand.php
+│       ├── ServicesCommand.php
+│       └── ShowCommand.php
 ├── Composer/
 │   └── ComposerScript.php
 ├── Generator/
-│   ├── BindingFileGenerator.php
 │   ├── ConfigFileGenerator.php
 │   ├── DefinitionGenerator.php
 │   └── ManifestGenerator.php
@@ -481,6 +489,9 @@ src/
 ├── PackageInfo.php
 ├── PackageManager.php
 └── RebuildResult.php
+
+bin/
+└── package                  CLI entry point (Composer bin)
 ```
 
 ---
@@ -498,7 +509,6 @@ manifest(): ?Manifest
 basePath(): string
 vendorPath(): string
 configPath(): string
-containerPath(): string
 definitionsPath(): string
 manifestPath(): string
 ```
@@ -506,7 +516,7 @@ manifestPath(): string
 ### PackageScanner
 
 ```
-scan(string $vendorPath): ScanResult
+scan(string $vendorPath, list<string> $exclude = []): ScanResult
 scanDirectory(string $directory, string $namespace, string $package): list<ScannedClass>
 ```
 
@@ -569,13 +579,14 @@ int $serviceCount
 int $bindingCount
 int $configCount
 list<string> $generatedConfigs
-list<string> $generatedBindings
+list<string> $orphanedConfigs
 ```
 
 ### ConfigFileGenerator
 
 ```
 generate(array $classes, array $packages, string $configPath, array $environments = [...]): list<string>
+ownedPaths(array $classes, string $configPath): list<string>
 ```
 
 ### DefinitionGenerator
@@ -587,13 +598,7 @@ generate(array $classes, array $packages = []): string
 ### ManifestGenerator
 
 ```
-generate(array $classes, array $packages = []): string
-```
-
-### BindingFileGenerator
-
-```
-generate(array $classes, array $packages, string $containerPath): list<string>
+generate(array $classes, array $packages = [], list<string> $ownedConfigs = []): string
 ```
 
 ---
