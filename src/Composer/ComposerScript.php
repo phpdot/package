@@ -45,5 +45,19 @@ final class ComposerScript
             $relative = str_replace($basePath . '/', '', $path);
             $io->write(sprintf('<info>phpdot/package:</info> generated %s', $relative));
         }
+
+        $orphans = [...$result->orphanedConfigs, ...$result->orphanedBindings];
+
+        if ($orphans !== []) {
+            $io->write('');
+            $io->write('<warning>phpdot/package: orphaned files (no longer owned by an installed package, may contain customisations):</warning>');
+
+            foreach ($orphans as $path) {
+                $relative = str_replace($basePath . '/', '', $path);
+                $io->write(sprintf('<warning>phpdot/package:</warning>   %s', $relative));
+            }
+
+            $io->write('<warning>phpdot/package: review and delete manually if no longer needed.</warning>');
+        }
     }
 }

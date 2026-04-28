@@ -8,6 +8,7 @@ use PHPdot\Container\Scope;
 use PHPdot\Package\Generator\ConfigFileGenerator;
 use PHPdot\Package\Scanner\PackageMeta;
 use PHPdot\Package\Scanner\ScannedClass;
+use PHPdot\Package\Tests\Fixtures\OuterConfig;
 use PHPdot\Package\Tests\Fixtures\SampleConfig;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -281,6 +282,93 @@ final class ConfigFileGeneratorTest extends TestCase
         $content = $this->readGenerated('sample.php');
         self::assertStringContainsString('test/pkg', $content);
         self::assertStringContainsString('@package', $content);
+    }
+
+    #[Test]
+    public function it_scaffolds_nested_dto_default_as_array(): void
+    {
+        $class = new ScannedClass(
+            OuterConfig::class,
+            Scope::SINGLETON,
+            ['hosts' => 'array', 'inner' => 'PHPdot\\Package\\Tests\\Fixtures\\InnerConfig'],
+            [],
+            'outer',
+            'test/pkg',
+            [],
+        );
+
+        $this->generator->generate([$class], $this->packages, $this->tmpDir);
+
+        $content = $this->readGenerated('outer.php');
+
+        // The nested DTO must NOT collapse to '' — it must scaffold the inner fields
+        self::assertStringNotContainsString("'inner' => ''", $content);
+        self::assertStringContainsString("'inner' => [", $content);
+        self::assertStringContainsString("'secure' => true", $content);
+        self::assertStringContainsString("'sameSite' => 'Lax'", $content);
+        self::assertStringContainsString("'maxAge' => 3600", $content);
+    }
+
+    #[Test]
+    public function nested_scaffold_produces_runnable_php(): void
+    {
+        $class = new ScannedClass(
+            OuterConfig::class,
+            Scope::SINGLETON,
+            ['hosts' => 'array', 'inner' => 'PHPdot\\Package\\Tests\\Fixtures\\InnerConfig'],
+            [],
+            'outer',
+            'test/pkg',
+            [],
+        );
+
+        $this->generator->generate([$class], $this->packages, $this->tmpDir);
+
+        /** @var array<string, mixed> $result */
+        $result = require $this->tmpDir . '/outer.php';
+
+        self::assertIsArray($result);
+        self::assertArrayHasKey('inner', $result);
+        self::assertIsArray($result['inner']);
+        self::assertSame(true, $result['inner']['secure']);
+        self::assertSame('Lax', $result['inner']['sameSite']);
+        self::assertSame(3600, $result['inner']['maxAge']);
+    }
+
+    #[Test]
+    public function it_includes_orphan_removal_note_in_header(): void
+    {
+        $this->generator->generate([$this->configClass()], $this->packages, $this->tmpDir);
+
+        $content = $this->readGenerated('sample.php');
+        self::assertStringContainsString('composer remove test/pkg', $content);
+        self::assertStringContainsString('orphaned', $content);
+    }
+
+    #[Test]
+    public function owned_paths_returns_full_set_regardless_of_existing_files(): void
+    {
+        // Create the file first to prove ownedPaths returns it even when it exists
+        mkdir($this->tmpDir, 0o755, true);
+        file_put_contents($this->tmpDir . '/sample.php', '<?php return [];');
+
+        $paths = $this->generator->ownedPaths([$this->configClass()], $this->tmpDir);
+
+        self::assertCount(1, $paths);
+        self::assertSame($this->tmpDir . '/sample.php', $paths[0]);
+    }
+
+    #[Test]
+    public function owned_paths_skips_classes_without_config_name(): void
+    {
+        $classes = [
+            $this->configClass(),
+            new ScannedClass('App\\Svc', Scope::SINGLETON, [], [], null, 'test/pkg'),
+        ];
+
+        $paths = $this->generator->ownedPaths($classes, $this->tmpDir);
+
+        self::assertCount(1, $paths);
     }
 
     private function configClass(): ScannedClass

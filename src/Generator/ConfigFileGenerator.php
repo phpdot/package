@@ -57,6 +57,32 @@ final class ConfigFileGenerator
     }
 
     /**
+     * Compute every absolute path this generator owns for the given scan,
+     * regardless of whether each file already exists. Used by PackageManager
+     * to record owned files in the manifest and to detect orphans on the
+     * next rebuild.
+     *
+     * @param list<ScannedClass> $classes
+     * @return list<string>
+     */
+    public function ownedPaths(array $classes, string $configPath): array
+    {
+        $paths = [];
+
+        foreach ($classes as $scanned) {
+            if ($scanned->configName === null) {
+                continue;
+            }
+
+            $paths[] = rtrim($configPath, '/') . '/' . $scanned->configName . '.php';
+        }
+
+        sort($paths);
+
+        return $paths;
+    }
+
+    /**
      * @param list<string> $environments
      */
     private function generateFile(ScannedClass $scanned, PackageMeta $meta, array $environments): string
@@ -130,6 +156,10 @@ final class ConfigFileGenerator
         $lines[] = "\n *";
         $lines[] = "\n * This is your file — modify it freely, we won't touch it.";
         $lines[] = "\n *";
+        $lines[] = "\n * Note: `composer remove {$scanned->package}` does NOT delete this file.";
+        $lines[] = "\n * phpdot/package will list it as orphaned on the next rebuild —";
+        $lines[] = "\n * delete it manually to clean up.";
+        $lines[] = "\n *";
         $lines[] = "\n * Commands:";
         $lines[] = "\n *   php dot package:config {$scanned->configName}       Show original defaults";
         $lines[] = "\n *   php dot package:reset {$scanned->configName}        Reset to defaults";
@@ -145,7 +175,7 @@ final class ConfigFileGenerator
         return ucfirst($words);
     }
 
-    private function formatDefault(mixed $value): string
+    private function formatDefault(mixed $value, int $indent = 1): string
     {
         if ($value === null) {
             return 'null';
@@ -167,7 +197,40 @@ final class ConfigFileGenerator
             return $this->formatArray($value);
         }
 
+        if (is_object($value)) {
+            return $this->formatNestedDto($value, $indent);
+        }
+
         return "''";
+    }
+
+    /**
+     * Recursively scaffold a nested DTO instance as a multi-line array.
+     * Reads each public, initialised property and emits its current value.
+     */
+    private function formatNestedDto(object $instance, int $indent): string
+    {
+        $reflection = new ReflectionClass($instance);
+        $parts = [];
+
+        $inner = str_repeat('    ', $indent + 1);
+        $close = str_repeat('    ', $indent);
+
+        foreach ($reflection->getProperties() as $prop) {
+            if (!$prop->isPublic() || !$prop->isInitialized($instance)) {
+                continue;
+            }
+
+            $name = $prop->getName();
+            $val = $prop->getValue($instance);
+            $parts[] = $inner . "'{$name}' => " . $this->formatDefault($val, $indent + 1);
+        }
+
+        if ($parts === []) {
+            return '[]';
+        }
+
+        return "[\n" . implode(",\n", $parts) . ",\n{$close}]";
     }
 
     /**
