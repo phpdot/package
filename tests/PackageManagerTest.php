@@ -76,7 +76,6 @@ final class PackageManagerTest extends TestCase
         self::assertSame(0, $result->bindingCount);
         self::assertSame(0, $result->configCount);
         self::assertSame([], $result->generatedConfigs);
-        self::assertSame([], $result->generatedBindings);
     }
 
     #[Test]
@@ -131,7 +130,6 @@ final class PackageManagerTest extends TestCase
         self::assertSame($this->basePath, $manager->basePath());
         self::assertSame($this->basePath . '/vendor', $manager->vendorPath());
         self::assertSame($this->basePath . '/config', $manager->configPath());
-        self::assertSame($this->basePath . '/container', $manager->containerPath());
     }
 
     #[Test]
@@ -163,20 +161,6 @@ final class PackageManagerTest extends TestCase
     }
 
     #[Test]
-    public function it_reads_container_dir_from_composer_json_extra(): void
-    {
-        $composer = ['extra' => ['phpdot' => ['container-dir' => 'di']]];
-        file_put_contents(
-            $this->basePath . '/composer.json',
-            json_encode($composer, JSON_THROW_ON_ERROR),
-        );
-
-        $manager = new PackageManager($this->basePath);
-
-        self::assertSame($this->basePath . '/di', $manager->containerPath());
-    }
-
-    #[Test]
     public function it_defaults_when_composer_json_has_no_extra(): void
     {
         $composer = ['name' => 'test/app'];
@@ -189,7 +173,6 @@ final class PackageManagerTest extends TestCase
 
         self::assertSame($this->basePath . '/vendor', $manager->vendorPath());
         self::assertSame($this->basePath . '/config', $manager->configPath());
-        self::assertSame($this->basePath . '/container', $manager->containerPath());
     }
 
     #[Test]

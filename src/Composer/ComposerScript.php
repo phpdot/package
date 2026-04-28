@@ -41,12 +41,7 @@ final class ComposerScript
             $io->write(sprintf('<info>phpdot/package:</info> generated %s', $relative));
         }
 
-        foreach ($result->generatedBindings as $path) {
-            $relative = str_replace($basePath . '/', '', $path);
-            $io->write(sprintf('<info>phpdot/package:</info> generated %s', $relative));
-        }
-
-        $orphans = [...$result->orphanedConfigs, ...$result->orphanedBindings];
+        $orphans = $result->orphanedConfigs;
 
         if ($orphans !== []) {
             $io->write('');

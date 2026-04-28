@@ -12,7 +12,6 @@ declare(strict_types=1);
 namespace PHPdot\Package;
 
 use PHPdot\Container\ContainerBuilder;
-use PHPdot\Package\Generator\BindingFileGenerator;
 use PHPdot\Package\Generator\ConfigFileGenerator;
 use PHPdot\Package\Generator\DefinitionGenerator;
 use PHPdot\Package\Generator\ManifestGenerator;
@@ -26,7 +25,6 @@ final class PackageManager
 
     private readonly string $vendorPath;
     private readonly string $configPath;
-    private readonly string $containerPath;
 
     /** @var list<string> */
     private readonly array $exclude;
@@ -44,7 +42,6 @@ final class PackageManager
         if (!is_file($composerPath)) {
             $this->vendorPath = $basePath . '/vendor';
             $this->configPath = $basePath . '/config';
-            $this->containerPath = $basePath . '/container';
             $this->exclude = [];
 
             return;
@@ -65,15 +62,10 @@ final class PackageManager
             ? $phpdot['config-dir']
             : 'config';
 
-        $containerDir = is_string($phpdot['container-dir'] ?? null)
-            ? $phpdot['container-dir']
-            : 'container';
-
         $exclude = $phpdot['exclude'] ?? null;
 
         $this->vendorPath = $basePath . '/' . $vendorDir;
         $this->configPath = $basePath . '/' . $configDir;
-        $this->containerPath = $basePath . '/' . $containerDir;
         $this->exclude = is_array($exclude)
             ? array_values(array_filter($exclude, 'is_string'))
             : [];
@@ -105,7 +97,7 @@ final class PackageManager
         // Read the previous ledger BEFORE the manifest is overwritten so we
         // know which files this package owned on the last rebuild. Diffing
         // against the new owned set tells us which files are now orphans.
-        $previouslyOwned = $this->readPreviouslyOwnedPaths();
+        $previouslyOwnedConfigs = $this->readPreviouslyOwnedConfigs();
 
         $scanner = new PackageScanner();
         $scanResult = $scanner->scan($this->vendorPath, $this->exclude);
@@ -114,10 +106,8 @@ final class PackageManager
         $packages = $scanResult->packages;
 
         $configGenerator = new ConfigFileGenerator();
-        $bindingGenerator = new BindingFileGenerator();
 
         $ownedConfigs = $configGenerator->ownedPaths($classes, $this->configPath);
-        $ownedBindings = $bindingGenerator->ownedPaths($classes, $this->containerPath);
 
         $defGenerator = new DefinitionGenerator();
         $defContent = $defGenerator->generate($classes, $packages);
@@ -128,7 +118,6 @@ final class PackageManager
             $classes,
             $packages,
             $ownedConfigs,
-            $ownedBindings,
         );
         $this->writePhpdotFile(self::MANIFEST_FILE, $manifestContent);
 
@@ -137,12 +126,6 @@ final class PackageManager
             $packages,
             $this->configPath,
             $this->environments,
-        );
-
-        $generatedBindings = $bindingGenerator->generate(
-            $classes,
-            $packages,
-            $this->containerPath,
         );
 
         $bindingCount = 0;
@@ -161,13 +144,7 @@ final class PackageManager
 
         $orphanedConfigs = array_values(
             array_filter(
-                array_diff($previouslyOwned['configs'], $ownedConfigs),
-                'is_file',
-            ),
-        );
-        $orphanedBindings = array_values(
-            array_filter(
-                array_diff($previouslyOwned['bindings'], $ownedBindings),
+                array_diff($previouslyOwnedConfigs, $ownedConfigs),
                 'is_file',
             ),
         );
@@ -178,41 +155,35 @@ final class PackageManager
             bindingCount: $bindingCount,
             configCount: $configCount,
             generatedConfigs: $generatedConfigs,
-            generatedBindings: $generatedBindings,
             orphanedConfigs: $orphanedConfigs,
-            orphanedBindings: $orphanedBindings,
         );
     }
 
     /**
-     * Read the `ownedConfigs` and `ownedBindings` lists from the previous
-     * manifest. Returns empty arrays on first run (no manifest yet) or when
-     * the manifest predates this ledger format.
+     * Read the `ownedConfigs` list from the previous manifest. Returns an
+     * empty list on first run (no manifest yet) or when the manifest
+     * predates this ledger format.
      *
-     * @return array{configs: list<string>, bindings: list<string>}
+     * @return list<string>
      */
-    private function readPreviouslyOwnedPaths(): array
+    private function readPreviouslyOwnedConfigs(): array
     {
         $path = $this->phpdotDir() . '/' . self::MANIFEST_FILE;
 
         if (!is_file($path)) {
-            return ['configs' => [], 'bindings' => []];
+            return [];
         }
 
         /** @var mixed $data */
         $data = require $path;
 
         if (!is_array($data)) {
-            return ['configs' => [], 'bindings' => []];
+            return [];
         }
 
         $configs = $data['ownedConfigs'] ?? [];
-        $bindings = $data['ownedBindings'] ?? [];
 
-        return [
-            'configs' => is_array($configs) ? array_values(array_filter($configs, 'is_string')) : [],
-            'bindings' => is_array($bindings) ? array_values(array_filter($bindings, 'is_string')) : [],
-        ];
+        return is_array($configs) ? array_values(array_filter($configs, 'is_string')) : [];
     }
 
 
@@ -277,11 +248,6 @@ final class PackageManager
     public function configPath(): string
     {
         return $this->configPath;
-    }
-
-    public function containerPath(): string
-    {
-        return $this->containerPath;
     }
 
     public function definitionsPath(): string
