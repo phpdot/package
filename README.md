@@ -300,15 +300,15 @@ To discover what's available to override, use the CLI inspector below.
 `phpdot/package` ships a binary at `vendor/bin/package` (Composer's `bin` mechanism — installs automatically). It provides full visibility into installed packages, services, configs, and bindings by reading `vendor/phpdot/manifest.php`.
 
 ```bash
-vendor/bin/package list                  # all installed phpdot packages
-vendor/bin/package show phpdot/http      # one package's full surface + override hints
-vendor/bin/package paths                 # resolved paths (root, vendor, config, manifest)
-vendor/bin/package config:list           # every config file, owner, presence
-vendor/bin/package services              # every service across all packages, scope, owner
-vendor/bin/package bindings              # every interface → implementation, owner
+vendor/bin/package package:list                  # all installed phpdot packages
+vendor/bin/package package:show phpdot/http      # one package's full surface + override hints
+vendor/bin/package package:paths                 # resolved paths (root, vendor, config, manifest)
+vendor/bin/package package:configs               # every config file, owner, presence
+vendor/bin/package package:services              # every service across all packages, scope, owner
+vendor/bin/package package:bindings              # every interface → implementation, owner
 ```
 
-Sample output of `vendor/bin/package show phpdot/http`:
+Sample output of `vendor/bin/package package:show phpdot/http`:
 
 ```
 phpdot/http

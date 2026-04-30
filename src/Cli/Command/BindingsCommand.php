@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * `package bindings` Command
+ * `package:bindings` Command
  *
  * @author Omar Hamdan <omar@phpdot.com>
  * @license MIT
@@ -18,7 +18,7 @@ use Symfony\Component\Console\Helper\Table;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 
-#[AsCommand(name: 'bindings', description: 'List every interface → implementation binding across all packages.')]
+#[AsCommand(name: 'package:bindings', description: 'List every interface → implementation binding across all packages.')]
 final class BindingsCommand extends Command
 {
     public function __construct(private readonly PackageManager $manager)

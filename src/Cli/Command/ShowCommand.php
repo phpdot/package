@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * `package show <package>` Command
+ * `package:show <package>` Command
  *
  * @author Omar Hamdan <omar@phpdot.com>
  * @license MIT
@@ -19,7 +19,7 @@ use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 
-#[AsCommand(name: 'show', description: 'Show services, configs, and bindings for one package.')]
+#[AsCommand(name: 'package:show', description: 'Show services, configs, and bindings for one package.')]
 final class ShowCommand extends Command
 {
     public function __construct(private readonly PackageManager $manager)
@@ -48,7 +48,7 @@ final class ShowCommand extends Command
 
         if ($info === null) {
             $output->writeln(sprintf('<error>Package "%s" not found in manifest.</error>', $name));
-            $output->writeln('<comment>Run `package list` to see installed packages.</comment>');
+            $output->writeln('<comment>Run `package:list` to see installed packages.</comment>');
 
             return Command::FAILURE;
         }

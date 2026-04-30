@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * `package list` Command
+ * `package:list` Command
  *
  * @author Omar Hamdan <omar@phpdot.com>
  * @license MIT
@@ -18,7 +18,7 @@ use Symfony\Component\Console\Helper\Table;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 
-#[AsCommand(name: 'list', description: 'List all installed phpdot packages.')]
+#[AsCommand(name: 'package:list', description: 'List all installed phpdot packages.')]
 final class ListCommand extends Command
 {
     public function __construct(private readonly PackageManager $manager)
@@ -61,7 +61,7 @@ final class ListCommand extends Command
         $table->render();
 
         $output->writeln('');
-        $output->writeln('<comment>Use `package show <package-name>` for details.</comment>');
+        $output->writeln('<comment>Use `package:show <package-name>` for details.</comment>');
 
         return Command::SUCCESS;
     }

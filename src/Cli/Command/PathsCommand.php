@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * `package paths` Command
+ * `package:paths` Command
  *
  * @author Omar Hamdan <omar@phpdot.com>
  * @license MIT
@@ -18,7 +18,7 @@ use Symfony\Component\Console\Helper\Table;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 
-#[AsCommand(name: 'paths', description: 'Show all resolved paths used by phpdot/package.')]
+#[AsCommand(name: 'package:paths', description: 'Show all resolved paths used by phpdot/package.')]
 final class PathsCommand extends Command
 {
     public function __construct(private readonly PackageManager $manager)

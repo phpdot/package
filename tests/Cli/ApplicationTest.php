@@ -15,11 +15,11 @@ final class ApplicationTest extends TestCase
     {
         $app = new Application(sys_get_temp_dir());
 
-        self::assertTrue($app->has('list'));
-        self::assertTrue($app->has('show'));
-        self::assertTrue($app->has('paths'));
-        self::assertTrue($app->has('config:list'));
-        self::assertTrue($app->has('services'));
-        self::assertTrue($app->has('bindings'));
+        self::assertTrue($app->has('package:list'));
+        self::assertTrue($app->has('package:show'));
+        self::assertTrue($app->has('package:paths'));
+        self::assertTrue($app->has('package:configs'));
+        self::assertTrue($app->has('package:services'));
+        self::assertTrue($app->has('package:bindings'));
     }
 }

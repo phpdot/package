@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * `package services` Command
+ * `package:services` Command
  *
  * @author Omar Hamdan <omar@phpdot.com>
  * @license MIT
@@ -18,7 +18,7 @@ use Symfony\Component\Console\Helper\Table;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 
-#[AsCommand(name: 'services', description: 'List every service across every installed phpdot package.')]
+#[AsCommand(name: 'package:services', description: 'List every service across every installed phpdot package.')]
 final class ServicesCommand extends Command
 {
     public function __construct(private readonly PackageManager $manager)
