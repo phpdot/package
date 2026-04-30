@@ -47,9 +47,42 @@ final class DefinitionGenerator
             }
         }
 
+        $lines[] = $this->generateSelfBindings();
         $lines[] = "\n];\n";
 
         return implode('', $lines);
+    }
+
+    /**
+     * Self-bindings for phpdot/package's own runtime services. Emitted on every
+     * generation so apps can inject `PackageManager` and `Manifest` without
+     * registering them manually. `Manifest` resolves through `PackageManager`,
+     * falling back to an empty manifest when no manifest file has been written
+     * yet (first install, before any rebuild).
+     */
+    private function generateSelfBindings(): string
+    {
+        return <<<'PHP'
+
+            /**
+             * phpdot/package
+             * Self-bindings — runtime access to the package manager and manifest.
+             *
+             * @see https://github.com/phpdot/package
+             */
+
+            \PHPdot\Package\PackageManager::class => new ScopedDefinition(
+                scope: Scope::SINGLETON,
+            ),
+
+            \PHPdot\Package\Manifest::class => new ScopedDefinition(
+                scope: Scope::SINGLETON,
+                factory: static fn (ContainerInterface $c): \PHPdot\Package\Manifest
+                    => $c->get(\PHPdot\Package\PackageManager::class)->manifest()
+                        ?? new \PHPdot\Package\Manifest([], ''),
+            ),
+
+        PHP;
     }
 
     private function generateHeader(): string

@@ -28,8 +28,10 @@ final class DefinitionGeneratorTest extends TestCase
         ]);
 
         self::assertStringContainsString('Scope::SINGLETON', $output);
-        self::assertStringContainsString('\\App\\SimpleService::class', $output);
-        self::assertStringNotContainsString('factory:', $output);
+        self::assertMatchesRegularExpression(
+            '/\\\\App\\\\SimpleService::class\s*=>\s*new ScopedDefinition\(\s*scope:\s*Scope::SINGLETON,\s*\),/',
+            $output,
+        );
     }
 
     #[Test]
@@ -136,6 +138,27 @@ final class DefinitionGeneratorTest extends TestCase
 
         $tokens = token_get_all($output);
         self::assertNotEmpty($tokens);
+    }
+
+    #[Test]
+    public function it_emits_self_bindings_for_package_manager_and_manifest(): void
+    {
+        $output = $this->generator->generate([]);
+
+        self::assertStringContainsString('\\PHPdot\\Package\\PackageManager::class', $output);
+        self::assertStringContainsString('\\PHPdot\\Package\\Manifest::class', $output);
+        self::assertStringContainsString('->manifest()', $output);
+    }
+
+    #[Test]
+    public function self_bindings_appear_even_with_scanned_classes(): void
+    {
+        $output = $this->generator->generate([
+            new ScannedClass('App\\Svc', Scope::SINGLETON, [], [], null, 'app/pkg'),
+        ]);
+
+        self::assertStringContainsString('\\PHPdot\\Package\\Manifest::class', $output);
+        self::assertStringContainsString('\\PHPdot\\Package\\PackageManager::class', $output);
     }
 
     #[Test]
