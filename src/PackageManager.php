@@ -11,11 +11,14 @@ declare(strict_types=1);
 
 namespace PHPdot\Package;
 
+use Composer\Autoload\ClassLoader;
 use PHPdot\Container\ContainerBuilder;
 use PHPdot\Package\Generator\ConfigFileGenerator;
 use PHPdot\Package\Generator\DefinitionGenerator;
 use PHPdot\Package\Generator\ManifestGenerator;
 use PHPdot\Package\Scanner\PackageScanner;
+use ReflectionClass;
+use RuntimeException;
 
 final class PackageManager
 {
@@ -23,6 +26,7 @@ final class PackageManager
     private const string DEFINITIONS_FILE = 'definitions.php';
     private const string MANIFEST_FILE = 'manifest.php';
 
+    private readonly string $basePath;
     private readonly string $vendorPath;
     private readonly string $configPath;
 
@@ -30,45 +34,105 @@ final class PackageManager
     private readonly array $exclude;
 
     /**
-     * @param string $basePath Absolute path to the project root
+     * @param string|null $basePath Absolute path to the project root. When null,
+     *                              auto-detected from the Composer autoloader
+     *                              that resolved this class.
      * @param list<string> $environments Environment names for config override blocks
      */
     public function __construct(
-        private readonly string $basePath,
+        ?string $basePath = null,
         private readonly array $environments = ['development', 'production', 'staging'],
     ) {
+        if ($basePath === null) {
+            $this->vendorPath = self::detectVendorPath();
+            $this->basePath = dirname($this->vendorPath);
+        } else {
+            $this->basePath = $basePath;
+            $this->vendorPath = $basePath . '/' . self::resolveVendorDir($basePath);
+        }
+
+        [$configDir, $exclude] = self::readPhpdotExtra($this->basePath);
+
+        $this->configPath = $this->basePath . '/' . $configDir;
+        $this->exclude = $exclude;
+    }
+
+    /**
+     * Detect the vendor directory from the Composer autoloader that registered
+     * this class. Falls back to the first registered loader when there is only
+     * one. With multiple loaders (e.g. global Composer tools), prefer the one
+     * whose vendor path is an ancestor of this file.
+     */
+    private static function detectVendorPath(): string
+    {
+        if (!class_exists(ClassLoader::class)) {
+            throw new RuntimeException(
+                'PackageManager could not auto-detect the project root: Composer autoloader is not loaded. '
+                . 'Pass an explicit $basePath to the constructor.',
+            );
+        }
+
+        $loaders = ClassLoader::getRegisteredLoaders();
+
+        if ($loaders === []) {
+            throw new RuntimeException(
+                'PackageManager could not auto-detect the project root: no Composer autoloader is registered. '
+                . 'Pass an explicit $basePath to the constructor.',
+            );
+        }
+
+        if (count($loaders) === 1) {
+            return array_key_first($loaders);
+        }
+
+        $selfFile = (string) (new ReflectionClass(self::class))->getFileName();
+
+        foreach (array_keys($loaders) as $vendorPath) {
+            if (str_starts_with($selfFile, $vendorPath . DIRECTORY_SEPARATOR)) {
+                return $vendorPath;
+            }
+        }
+
+        return array_key_first($loaders);
+    }
+
+    private static function resolveVendorDir(string $basePath): string
+    {
         $composerPath = $basePath . '/composer.json';
 
         if (!is_file($composerPath)) {
-            $this->vendorPath = $basePath . '/vendor';
-            $this->configPath = $basePath . '/config';
-            $this->exclude = [];
-
-            return;
+            return 'vendor';
         }
 
         /** @var array<string, mixed> $composer */
         $composer = json_decode((string) file_get_contents($composerPath), true, 512, JSON_THROW_ON_ERROR);
-
         $config = is_array($composer['config'] ?? null) ? $composer['config'] : [];
-        $vendorDir = is_string($config['vendor-dir'] ?? null)
-            ? $config['vendor-dir']
-            : 'vendor';
 
+        return is_string($config['vendor-dir'] ?? null) ? $config['vendor-dir'] : 'vendor';
+    }
+
+    /**
+     * @return array{0: string, 1: list<string>} [configDir, exclude]
+     */
+    private static function readPhpdotExtra(string $basePath): array
+    {
+        $composerPath = $basePath . '/composer.json';
+
+        if (!is_file($composerPath)) {
+            return ['config', []];
+        }
+
+        /** @var array<string, mixed> $composer */
+        $composer = json_decode((string) file_get_contents($composerPath), true, 512, JSON_THROW_ON_ERROR);
         $extra = is_array($composer['extra'] ?? null) ? $composer['extra'] : [];
         $phpdot = is_array($extra['phpdot'] ?? null) ? $extra['phpdot'] : [];
 
-        $configDir = is_string($phpdot['config-dir'] ?? null)
-            ? $phpdot['config-dir']
-            : 'config';
-
-        $exclude = $phpdot['exclude'] ?? null;
-
-        $this->vendorPath = $basePath . '/' . $vendorDir;
-        $this->configPath = $basePath . '/' . $configDir;
-        $this->exclude = is_array($exclude)
-            ? array_values(array_filter($exclude, 'is_string'))
+        $configDir = is_string($phpdot['config-dir'] ?? null) ? $phpdot['config-dir'] : 'config';
+        $exclude = is_array($phpdot['exclude'] ?? null)
+            ? array_values(array_filter($phpdot['exclude'], 'is_string'))
             : [];
+
+        return [$configDir, $exclude];
     }
 
     /**
