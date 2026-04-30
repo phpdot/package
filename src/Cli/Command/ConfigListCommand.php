@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * `package config:list` Command
+ * `package:configs` Command
  *
  * @author Omar Hamdan <omar@phpdot.com>
  * @license MIT
@@ -18,7 +18,7 @@ use Symfony\Component\Console\Helper\Table;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 
-#[AsCommand(name: 'config:list', description: 'List every config file owned by a phpdot package.')]
+#[AsCommand(name: 'package:configs', description: 'List every config file owned by a phpdot package.')]
 final class ConfigListCommand extends Command
 {
     public function __construct(private readonly PackageManager $manager)
