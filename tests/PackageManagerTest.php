@@ -233,6 +233,30 @@ final class PackageManagerTest extends TestCase
         self::assertSame(0, $result->packageCount);
     }
 
+    #[Test]
+    public function rebuild_resolves_orphan_configs_from_relative_names(): void
+    {
+        $configDir = $this->basePath . '/config';
+        mkdir($configDir, 0o755, true);
+        file_put_contents($configDir . '/sample.php', '<?php return [];');
+
+        $manager = new PackageManager($this->basePath);
+
+        // Seed a previous manifest that records the owned config by name only —
+        // the portable format. No installed package owns it now, so the next
+        // rebuild must flag it as an orphan, resolving the relative name to an
+        // absolute path via the current config dir.
+        mkdir(dirname($manager->manifestPath()), 0o755, true);
+        file_put_contents(
+            $manager->manifestPath(),
+            "<?php\n\nreturn ['ownedConfigs' => ['sample.php'], 'packages' => []];\n",
+        );
+
+        $result = $manager->rebuild();
+
+        self::assertSame([$configDir . '/sample.php'], $result->orphanedConfigs);
+    }
+
     private function removeDir(string $dir): void
     {
         if (!is_dir($dir)) {

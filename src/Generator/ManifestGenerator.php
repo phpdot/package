@@ -19,7 +19,7 @@ final class ManifestGenerator
     /**
      * @param list<ScannedClass> $classes
      * @param array<string, PackageMeta> $packages
-     * @param list<string> $ownedConfigs Absolute paths of config files owned by current packages
+     * @param list<string> $ownedConfigs Config file names owned by current packages, relative to the config directory
      */
     public function generate(
         array $classes,

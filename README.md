@@ -232,7 +232,7 @@ return [
     'generated_at' => '2026-04-28T15:30:00+00:00',
 
     'ownedConfigs' => [
-        '/app/config/i18n.php',
+        'i18n.php',
     ],
 
     'packages' => [
@@ -258,7 +258,7 @@ return [
 ];
 ```
 
-`ownedConfigs` is consumed on the next rebuild: any path that was owned previously but isn't owned now is reported as orphaned. The framework never deletes user-owned files automatically; the developer is shown a warning and decides whether to delete.
+`ownedConfigs` records config file names relative to the config directory, so the manifest stays portable across machines and install paths. It is consumed on the next rebuild: any name owned previously but not now is resolved against the current config directory and reported as orphaned. The framework never deletes user-owned files automatically; the developer is shown a warning and decides whether to delete.
 
 ---
 

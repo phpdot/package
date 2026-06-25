@@ -85,7 +85,7 @@ final class PackageManager
             return array_key_first($loaders);
         }
 
-        $selfFile = (string) (new ReflectionClass(self::class))->getFileName();
+        $selfFile = (string) new ReflectionClass(self::class)->getFileName();
 
         foreach (array_keys($loaders) as $vendorPath) {
             if (str_starts_with($selfFile, $vendorPath . DIRECTORY_SEPARATOR)) {
@@ -171,7 +171,13 @@ final class PackageManager
 
         $configGenerator = new ConfigFileGenerator();
 
-        $ownedConfigs = $configGenerator->ownedPaths($classes, $this->configPath);
+        // Record owned configs by name (relative to the config dir) so the
+        // manifest stays portable across machines and install paths. Absolute
+        // paths are re-resolved from the current config path when needed.
+        $ownedConfigs = array_map(
+            static fn(string $path): string => basename($path),
+            $configGenerator->ownedPaths($classes, $this->configPath),
+        );
 
         $defGenerator = new DefinitionGenerator();
         $defContent = $defGenerator->generate($classes, $packages);
@@ -206,12 +212,15 @@ final class PackageManager
             $packageNames[$scanned->package] = true;
         }
 
-        $orphanedConfigs = array_values(
-            array_filter(
-                array_diff($previouslyOwnedConfigs, $ownedConfigs),
-                'is_file',
-            ),
-        );
+        $orphanedConfigs = [];
+
+        foreach (array_diff($previouslyOwnedConfigs, $ownedConfigs) as $name) {
+            $path = $this->configPath . '/' . $name;
+
+            if (is_file($path)) {
+                $orphanedConfigs[] = $path;
+            }
+        }
 
         return new RebuildResult(
             packageCount: count($packageNames),
