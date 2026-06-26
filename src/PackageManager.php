@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace PHPdot\Package;
 
 use Composer\Autoload\ClassLoader;
+use Composer\InstalledVersions;
 use PHPdot\Container\ContainerBuilder;
 use PHPdot\Package\Generator\ConfigFileGenerator;
 use PHPdot\Package\Generator\DefinitionGenerator;
@@ -45,7 +46,7 @@ final class PackageManager
     ) {
         if ($basePath === null) {
             $this->vendorPath = self::detectVendorPath();
-            $this->basePath = dirname($this->vendorPath);
+            $this->basePath = self::detectProjectRoot();
         } else {
             $this->basePath = $basePath;
             $this->vendorPath = $basePath . '/' . self::resolveVendorDir($basePath);
@@ -55,6 +56,20 @@ final class PackageManager
 
         $this->configPath = $this->basePath . '/' . $configDir;
         $this->exclude = $exclude;
+    }
+
+    /**
+     * The project root (the directory of the root composer.json), taken from
+     * Composer's runtime metadata. Authoritative even when the vendor directory
+     * is relocated via a custom `vendor-dir` (e.g. `protected/vendor`) — no path
+     * guessing. Used only when an explicit base path is not supplied.
+     */
+    private static function detectProjectRoot(): string
+    {
+        $installPath = InstalledVersions::getRootPackage()['install_path'];
+        $resolved = realpath($installPath);
+
+        return $resolved !== false ? $resolved : $installPath;
     }
 
     /**

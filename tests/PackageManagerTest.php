@@ -280,6 +280,22 @@ final class PackageManagerTest extends TestCase
         self::assertSame([$configDir . '/database/mysql.php'], $result->orphanedConfigs);
     }
 
+    #[Test]
+    public function config_dir_is_read_from_root_composer_json_with_nested_vendor(): void
+    {
+        // Root composer.json declares a relocated vendor-dir and a custom
+        // config-dir; both must resolve relative to the project root.
+        file_put_contents($this->basePath . '/composer.json', json_encode([
+            'config' => ['vendor-dir' => 'protected/vendor'],
+            'extra' => ['phpdot' => ['config-dir' => 'app/config']],
+        ], JSON_THROW_ON_ERROR));
+
+        $manager = new PackageManager($this->basePath);
+
+        self::assertSame($this->basePath . '/protected/vendor', $manager->vendorPath());
+        self::assertSame($this->basePath . '/app/config', $manager->configPath());
+    }
+
     private function removeDir(string $dir): void
     {
         if (!is_dir($dir)) {

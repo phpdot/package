@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace PHPdot\Package\Composer;
 
+use Composer\Factory;
 use Composer\Script\Event;
 use PHPdot\Package\PackageManager;
 
@@ -18,9 +19,11 @@ final class ComposerScript
 {
     public static function postAutoloadDump(Event $event): void
     {
-        /** @var string $vendorDir */
-        $vendorDir = $event->getComposer()->getConfig()->get('vendor-dir');
-        $basePath = dirname($vendorDir);
+        // Resolve the project root from Composer's own metadata — the directory
+        // of the root composer.json — so a relocated vendor-dir cannot skew it.
+        $composerFile = (string) Factory::getComposerFile();
+        $resolved = realpath($composerFile);
+        $basePath = dirname($resolved !== false ? $resolved : $composerFile);
 
         $manager = new PackageManager($basePath);
         $result = $manager->rebuild();
