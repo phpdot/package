@@ -171,11 +171,16 @@ final class PackageManager
 
         $configGenerator = new ConfigFileGenerator();
 
-        // Record owned configs by name (relative to the config dir) so the
-        // manifest stays portable across machines and install paths. Absolute
-        // paths are re-resolved from the current config path when needed.
+        // Record owned configs by their path relative to the config dir,
+        // preserving any subdirectories for nested config names (e.g.
+        // "database/mysql.php"). This keeps the manifest portable across
+        // machines and install paths; absolute paths are re-resolved from the
+        // current config path when needed.
+        $prefix = rtrim($this->configPath, '/') . '/';
         $ownedConfigs = array_map(
-            static fn(string $path): string => basename($path),
+            static fn(string $path): string => str_starts_with($path, $prefix)
+                ? substr($path, strlen($prefix))
+                : basename($path),
             $configGenerator->ownedPaths($classes, $this->configPath),
         );
 

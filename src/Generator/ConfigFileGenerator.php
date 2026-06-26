@@ -43,8 +43,10 @@ final class ConfigFileGenerator
                 continue;
             }
 
-            if (!is_dir($configPath)) {
-                mkdir($configPath, 0o755, true);
+            $directory = dirname($filePath);
+
+            if (!is_dir($directory)) {
+                mkdir($directory, 0o755, true);
             }
 
             $meta = $packages[$scanned->package] ?? new PackageMeta(name: $scanned->package);

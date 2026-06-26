@@ -257,6 +257,29 @@ final class PackageManagerTest extends TestCase
         self::assertSame([$configDir . '/sample.php'], $result->orphanedConfigs);
     }
 
+    #[Test]
+    public function rebuild_resolves_orphan_configs_in_nested_subdirectories(): void
+    {
+        $configDir = $this->basePath . '/config';
+        mkdir($configDir . '/database', 0o755, true);
+        file_put_contents($configDir . '/database/mysql.php', '<?php return [];');
+
+        $manager = new PackageManager($this->basePath);
+
+        // Seed a previous manifest recording a nested config by its relative
+        // subdirectory path. No installed package owns it now, so rebuild must
+        // resolve the relative path under the config dir and flag it orphaned.
+        mkdir(dirname($manager->manifestPath()), 0o755, true);
+        file_put_contents(
+            $manager->manifestPath(),
+            "<?php\n\nreturn ['ownedConfigs' => ['database/mysql.php'], 'packages' => []];\n",
+        );
+
+        $result = $manager->rebuild();
+
+        self::assertSame([$configDir . '/database/mysql.php'], $result->orphanedConfigs);
+    }
+
     private function removeDir(string $dir): void
     {
         if (!is_dir($dir)) {

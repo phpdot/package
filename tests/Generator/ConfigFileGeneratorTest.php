@@ -50,6 +50,25 @@ final class ConfigFileGeneratorTest extends TestCase
     }
 
     #[Test]
+    public function it_generates_nested_config_file_creating_subdirectories(): void
+    {
+        $nested = new ScannedClass(
+            SampleConfig::class,
+            Scope::SINGLETON,
+            [],
+            [],
+            'database/mysql',
+            'test/pkg',
+        );
+
+        $generated = $this->generator->generate([$nested], $this->packages, $this->tmpDir);
+
+        self::assertCount(1, $generated);
+        self::assertFileExists($this->tmpDir . '/database/mysql.php');
+        self::assertSame($this->tmpDir . '/database/mysql.php', $generated[0]);
+    }
+
+    #[Test]
     public function it_contains_parameter_keys_with_defaults(): void
     {
         $this->generator->generate([$this->configClass()], $this->packages, $this->tmpDir);
