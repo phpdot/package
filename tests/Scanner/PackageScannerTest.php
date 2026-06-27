@@ -10,6 +10,7 @@ use PHPdot\Package\Scanner\PackageScanner;
 use PHPdot\Package\Scanner\ScanResult;
 use PHPdot\Package\Tests\Fixtures\AbstractService;
 use PHPdot\Package\Tests\Fixtures\InstallHookWithoutHandler;
+use PHPdot\Package\Tests\Fixtures\IntersectionService;
 use PHPdot\Package\Tests\Fixtures\NoAttributeClass;
 use PHPdot\Package\Tests\Fixtures\SampleConfig;
 use PHPdot\Package\Tests\Fixtures\SampleInstallHook;
@@ -352,6 +353,16 @@ final class PackageScannerTest extends TestCase
         unlink($tmpDir . '/composer/installed.json');
         rmdir($tmpDir . '/composer');
         rmdir($tmpDir);
+    }
+
+    #[Test]
+    public function it_resolves_intersection_type_params_in_order(): void
+    {
+        $results = $this->scanner->scanDirectory($this->fixturesDir, 'PHPdot\\Package\\Tests\\Fixtures\\', 'test/pkg');
+        $found = $this->findByClass($results, IntersectionService::class);
+
+        self::assertNotNull($found);
+        self::assertSame([SampleInterface::class, SimpleService::class], $found->params);
     }
 
     /**

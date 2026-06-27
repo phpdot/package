@@ -20,6 +20,7 @@ use PHPdot\Container\Scope;
 use PHPdot\Package\Attribute\InstallHook;
 use PHPdot\Package\Contract\InstallHandler;
 use ReflectionClass;
+use ReflectionIntersectionType;
 use ReflectionNamedType;
 
 final class PackageScanner
@@ -231,11 +232,17 @@ final class PackageScanner
         foreach ($constructor->getParameters() as $param) {
             $type = $param->getType();
 
-            if (!$type instanceof ReflectionNamedType) {
+            if ($type instanceof ReflectionIntersectionType) {
+                $member = $this->firstClassMember($type);
+
+                if ($member !== null) {
+                    $params[] = $member;
+                }
+
                 continue;
             }
 
-            if ($type->isBuiltin()) {
+            if (!$type instanceof ReflectionNamedType || $type->isBuiltin()) {
                 continue;
             }
 
@@ -245,6 +252,28 @@ final class PackageScanner
         }
 
         return $params;
+    }
+
+    /**
+     * An intersection (A&B&C) is satisfiable only by a single service bound to
+     * every member, so any one member resolves it.
+     *
+     * @return class-string|null
+     */
+    private function firstClassMember(ReflectionIntersectionType $type): ?string
+    {
+        foreach ($type->getTypes() as $member) {
+            if (!$member instanceof ReflectionNamedType || $member->isBuiltin()) {
+                continue;
+            }
+
+            /** @var class-string $name */
+            $name = $member->getName();
+
+            return $name;
+        }
+
+        return null;
     }
 
     /**
