@@ -22,6 +22,7 @@ use PHPdot\Package\Contract\InstallHandler;
 use ReflectionClass;
 use ReflectionIntersectionType;
 use ReflectionNamedType;
+use ReflectionType;
 
 final class PackageScanner
 {
@@ -216,8 +217,13 @@ final class PackageScanner
     }
 
     /**
+     * Required constructor params as name => resolvable type FQCN. Optional
+     * params are skipped so their defaults apply; params with no resolvable
+     * class (builtin, union) are skipped too. The generator emits named
+     * arguments, so skipping a param never shifts the others.
+     *
      * @param ReflectionClass<object> $ref
-     * @return list<class-string>
+     * @return array<string, class-string>
      */
     private function resolveParams(ReflectionClass $ref): array
     {
@@ -230,45 +236,45 @@ final class PackageScanner
         $params = [];
 
         foreach ($constructor->getParameters() as $param) {
-            $type = $param->getType();
-
-            if ($type instanceof ReflectionIntersectionType) {
-                $member = $this->firstClassMember($type);
-
-                if ($member !== null) {
-                    $params[] = $member;
-                }
-
+            if ($param->isOptional()) {
                 continue;
             }
 
-            if (!$type instanceof ReflectionNamedType || $type->isBuiltin()) {
-                continue;
-            }
+            $class = $this->resolvableClass($param->getType());
 
-            /** @var class-string $typeName */
-            $typeName = $type->getName();
-            $params[] = $typeName;
+            if ($class !== null) {
+                $params[$param->getName()] = $class;
+            }
         }
 
         return $params;
     }
 
     /**
-     * An intersection (A&B&C) is satisfiable only by a single service bound to
-     * every member, so any one member resolves it.
+     * The container-resolvable class for a parameter type, or null when it has
+     * none (builtin, union, untyped). An intersection resolves via its first
+     * member, since a single service is bound to every member.
      *
      * @return class-string|null
      */
-    private function firstClassMember(ReflectionIntersectionType $type): ?string
+    private function resolvableClass(?ReflectionType $type): ?string
     {
-        foreach ($type->getTypes() as $member) {
-            if (!$member instanceof ReflectionNamedType || $member->isBuiltin()) {
-                continue;
+        if ($type instanceof ReflectionIntersectionType) {
+            foreach ($type->getTypes() as $member) {
+                if ($member instanceof ReflectionNamedType && !$member->isBuiltin()) {
+                    /** @var class-string $name */
+                    $name = $member->getName();
+
+                    return $name;
+                }
             }
 
+            return null;
+        }
+
+        if ($type instanceof ReflectionNamedType && !$type->isBuiltin()) {
             /** @var class-string $name */
-            $name = $member->getName();
+            $name = $type->getName();
 
             return $name;
         }

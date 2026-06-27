@@ -158,8 +158,8 @@ final class DefinitionGenerator
         }
 
         $gets = [];
-        foreach ($scanned->params as $param) {
-            $gets[] = "            \$c->get({$this->fqcn($param)}::class),";
+        foreach ($scanned->params as $name => $param) {
+            $gets[] = "            {$name}: \$c->get({$this->fqcn($param)}::class),";
         }
         $getLines = implode("\n", $gets);
 

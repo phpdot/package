@@ -21,7 +21,7 @@ final readonly class ScannedClass
     /**
      * @param class-string $class Fully qualified class name
      * @param Scope|null $scope Container scope, or null for a non-service (e.g. install-hook-only) class
-     * @param list<class-string> $params Constructor param type FQCNs (classes/interfaces only)
+     * @param array<string, class-string> $params Required constructor params as name => resolvable type FQCN
      * @param list<class-string> $binds Interface FQCNs from #[Binds]
      * @param string|null $configName Config file name from #[Config], or null
      * @param string $package Composer package name

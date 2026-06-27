@@ -38,12 +38,12 @@ final class DefinitionGeneratorTest extends TestCase
     public function it_generates_factory_with_params(): void
     {
         $output = $this->generator->generate([
-            new ScannedClass('App\\MyService', Scope::SCOPED, ['App\\DepA', 'App\\DepB'], [], null, 'app/pkg'),
+            new ScannedClass('App\\MyService', Scope::SCOPED, ['depA' => 'App\\DepA', 'depB' => 'App\\DepB'], [], null, 'app/pkg'),
         ]);
 
         self::assertStringContainsString('Scope::SCOPED', $output);
-        self::assertStringContainsString('$c->get(\\App\\DepA::class)', $output);
-        self::assertStringContainsString('$c->get(\\App\\DepB::class)', $output);
+        self::assertStringContainsString('depA: $c->get(\\App\\DepA::class)', $output);
+        self::assertStringContainsString('depB: $c->get(\\App\\DepB::class)', $output);
         self::assertStringContainsString('new \\App\\MyService(', $output);
     }
 
@@ -96,7 +96,7 @@ final class DefinitionGeneratorTest extends TestCase
     public function it_generates_valid_php(): void
     {
         $output = $this->generator->generate([
-            new ScannedClass('App\\Svc', Scope::SINGLETON, ['App\\Dep'], ['App\\Iface'], 'svc', 'app/pkg'),
+            new ScannedClass('App\\Svc', Scope::SINGLETON, ['dep' => 'App\\Dep'], ['App\\Iface'], 'svc', 'app/pkg'),
         ]);
 
         $tokens = token_get_all($output);
@@ -132,7 +132,7 @@ final class DefinitionGeneratorTest extends TestCase
     public function it_uses_leading_backslash(): void
     {
         $output = $this->generator->generate([
-            new ScannedClass('App\\MyClass', Scope::SINGLETON, ['App\\Dep'], [], null, 'app/pkg'),
+            new ScannedClass('App\\MyClass', Scope::SINGLETON, ['dep' => 'App\\Dep'], [], null, 'app/pkg'),
         ]);
 
         self::assertStringContainsString('\\App\\MyClass::class', $output);
