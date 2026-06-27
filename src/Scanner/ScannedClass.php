@@ -20,20 +20,22 @@ final readonly class ScannedClass
 {
     /**
      * @param class-string $class Fully qualified class name
-     * @param Scope $scope Container scope
+     * @param Scope|null $scope Container scope, or null for a non-service (e.g. install-hook-only) class
      * @param list<class-string> $params Constructor param type FQCNs (classes/interfaces only)
      * @param list<class-string> $binds Interface FQCNs from #[Binds]
      * @param string|null $configName Config file name from #[Config], or null
      * @param string $package Composer package name
      * @param array<string, string> $paramDescriptions Parameter name => PHPDoc description
+     * @param bool $installHook Whether the class is an #[InstallHook] handler
      */
     public function __construct(
         public string $class,
-        public Scope $scope,
+        public ?Scope $scope,
         public array $params,
         public array $binds,
         public ?string $configName,
         public string $package,
         public array $paramDescriptions = [],
+        public bool $installHook = false,
     ) {}
 }

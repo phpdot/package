@@ -39,10 +39,16 @@ final class DefinitionGenerator
             $lines[] = $this->generatePackageHeader($package, $meta);
 
             foreach ($group as $scanned) {
-                $lines[] = $this->generateClass($scanned);
+                // Non-service classes (e.g. install-hook-only) carry no scope and
+                // get no container definition.
+                if ($scanned->scope === null) {
+                    continue;
+                }
+
+                $lines[] = $this->generateClass($scanned, $scanned->scope);
 
                 foreach ($scanned->binds as $interface) {
-                    $lines[] = $this->generateBinding($scanned, $interface);
+                    $lines[] = $this->generateBinding($scanned, $scanned->scope, $interface);
                 }
             }
         }
@@ -124,10 +130,10 @@ final class DefinitionGenerator
         return $lines;
     }
 
-    private function generateClass(ScannedClass $scanned): string
+    private function generateClass(ScannedClass $scanned, Scope $classScope): string
     {
         $fqcn = $this->fqcn($scanned->class);
-        $scope = $this->scopeString($scanned->scope);
+        $scope = $this->scopeString($classScope);
 
         if ($scanned->configName !== null) {
             return <<<PHP
@@ -170,11 +176,11 @@ final class DefinitionGenerator
             PHP;
     }
 
-    private function generateBinding(ScannedClass $scanned, string $interface): string
+    private function generateBinding(ScannedClass $scanned, Scope $classScope, string $interface): string
     {
         $ifqcn = $this->fqcn($interface);
         $cfqcn = $this->fqcn($scanned->class);
-        $scope = $this->scopeString($scanned->scope);
+        $scope = $this->scopeString($classScope);
 
         return <<<PHP
 

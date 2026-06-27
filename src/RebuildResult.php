@@ -20,6 +20,7 @@ final readonly class RebuildResult
      * @param int $configCount Config DTOs found
      * @param list<string> $generatedConfigs Paths of newly generated config files
      * @param list<string> $orphanedConfigs Paths of config files no longer backed by an installed package
+     * @param list<string> $installMessages One-line messages returned by #[InstallHook] handlers
      */
     public function __construct(
         public int $packageCount,
@@ -28,5 +29,6 @@ final readonly class RebuildResult
         public int $configCount,
         public array $generatedConfigs,
         public array $orphanedConfigs = [],
+        public array $installMessages = [],
     ) {}
 }

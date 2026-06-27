@@ -17,6 +17,8 @@ use PHPdot\Container\Attribute\Scoped;
 use PHPdot\Container\Attribute\Singleton;
 use PHPdot\Container\Attribute\Transient;
 use PHPdot\Container\Scope;
+use PHPdot\Package\Attribute\InstallHook;
+use PHPdot\Package\Contract\InstallHandler;
 use ReflectionClass;
 use ReflectionNamedType;
 
@@ -156,7 +158,11 @@ final class PackageScanner
 
         $scope = $this->resolveScope($ref);
 
-        if ($scope === null) {
+        $installHook = $ref->getAttributes(InstallHook::class) !== []
+            && $ref->implementsInterface(InstallHandler::class);
+
+        // Neither a container service nor an install hook → nothing to record.
+        if ($scope === null && !$installHook) {
             return null;
         }
 
@@ -179,6 +185,7 @@ final class PackageScanner
             binds: $binds,
             configName: $configName,
             package: $package,
+            installHook: $installHook,
             paramDescriptions: $paramDescriptions,
         );
     }

@@ -2,7 +2,7 @@
 
 Attribute-driven package scanning, definition generation, and config scaffolding for PHPdot.
 
-Scans vendor packages for container attributes (`#[Singleton]`, `#[Scoped]`, `#[Transient]`, `#[Config]`, `#[Binds]`), generates a cached container definitions file, scaffolds config files with PHPDoc descriptions and environment overrides, and ships a CLI inspector (`vendor/bin/package`) for full visibility into what's installed and what can be overridden.
+Scans vendor packages for container attributes (`#[Singleton]`, `#[Scoped]`, `#[Transient]`, `#[Config]`, `#[Binds]`, `#[InstallHook]`), generates a cached container definitions file, scaffolds config files with PHPDoc descriptions and environment overrides, runs attribute-discovered install hooks (so packages need no Composer script of their own), and ships a CLI inspector (`vendor/bin/package`) for full visibility into what's installed and what can be overridden.
 
 ---
 
@@ -36,12 +36,14 @@ composer require phpdot/i18n
 PackageScanner reads vendor/composer/installed.json
     → finds packages with phpdot/container in require or require-dev
     → extracts package metadata (description, url, author)
-    → reflects attributed classes (#[Singleton], #[Scoped], #[Transient], #[Config], #[Binds])
+    → reflects attributed classes (#[Singleton], #[Scoped], #[Transient], #[Config], #[Binds], #[InstallHook])
     → parses @param PHPDoc descriptions for #[Config] DTOs
     ↓
 DefinitionGenerator      → vendor/phpdot/definitions.php    (cached container definitions)
 ManifestGenerator        → vendor/phpdot/manifest.php       (package metadata + ownedConfigs ledger)
 ConfigFileGenerator      → config/{name}.php                (once, never overwritten)
+    ↓
+#[InstallHook] handlers  → run after configs exist          (no per-package Composer script)
 ```
 
 At boot time:
@@ -446,6 +448,30 @@ For `#[Config]` classes, the scanner parses `@param` PHPDoc descriptions from th
 | `#[Transient]` | class | New instance every resolution |
 | `#[Config('name')]` | class | Singleton, hydrated from `config/{name}.php` via `Configuration::dto()` |
 | `#[Binds(Interface::class)]` | class | Registers as default for interface (repeatable). Bakes into `definitions.php` — no separate scaffold file. |
+| `#[InstallHook]` | class | Discovered and run once at install (after configs are generated). The class must implement `InstallHandler`. Not a container service. |
+
+---
+
+## Install Hooks
+
+A package can run setup logic at install time — filling a generated config, creating a directory, etc. — **without** the app wiring a Composer script per package. Mark a class `#[InstallHook]` and implement `InstallHandler`:
+
+```php
+use PHPdot\Package\Attribute\InstallHook;
+use PHPdot\Package\Contract\InstallHandler;
+
+#[InstallHook]
+final class Installer implements InstallHandler
+{
+    // CLI-only, runs at composer time (no container) after config files exist.
+    public static function install(string $projectRoot, string $configDir): ?string
+    {
+        // ... return an optional one-line message to log, or null
+    }
+}
+```
+
+The scanner discovers it like any other attribute; `post-autoload-dump` invokes each handler after generating configs, in discovery order, and prints any returned message. The handler is idempotent by contract (it re-runs on every Composer operation). It is **not** registered as a container service.
 
 ---
 

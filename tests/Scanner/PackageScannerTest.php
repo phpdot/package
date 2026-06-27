@@ -9,8 +9,10 @@ use PHPdot\Package\Scanner\PackageMeta;
 use PHPdot\Package\Scanner\PackageScanner;
 use PHPdot\Package\Scanner\ScanResult;
 use PHPdot\Package\Tests\Fixtures\AbstractService;
+use PHPdot\Package\Tests\Fixtures\InstallHookWithoutHandler;
 use PHPdot\Package\Tests\Fixtures\NoAttributeClass;
 use PHPdot\Package\Tests\Fixtures\SampleConfig;
+use PHPdot\Package\Tests\Fixtures\SampleInstallHook;
 use PHPdot\Package\Tests\Fixtures\SampleInterface;
 use PHPdot\Package\Tests\Fixtures\SampleLoader;
 use PHPdot\Package\Tests\Fixtures\SampleService;
@@ -68,6 +70,26 @@ final class PackageScannerTest extends TestCase
 
         self::assertNotNull($found);
         self::assertContains(SampleInterface::class, $found->binds);
+    }
+
+    #[Test]
+    public function it_scans_install_hook_only_class(): void
+    {
+        $results = $this->scanner->scanDirectory($this->fixturesDir, 'PHPdot\\Package\\Tests\\Fixtures\\', 'test/pkg');
+        $found = $this->findByClass($results, SampleInstallHook::class);
+
+        self::assertNotNull($found);
+        self::assertTrue($found->installHook);
+        self::assertNull($found->scope);
+    }
+
+    #[Test]
+    public function it_ignores_install_hook_without_handler_interface(): void
+    {
+        $results = $this->scanner->scanDirectory($this->fixturesDir, 'PHPdot\\Package\\Tests\\Fixtures\\', 'test/pkg');
+        $found = $this->findByClass($results, InstallHookWithoutHandler::class);
+
+        self::assertNull($found);
     }
 
     #[Test]

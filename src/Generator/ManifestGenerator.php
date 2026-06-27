@@ -107,6 +107,10 @@ final class ManifestGenerator
 
         $lines .= "            'services' => [\n";
         foreach ($group as $scanned) {
+            if ($scanned->scope === null) {
+                continue;
+            }
+
             $escapedClass = $this->escapeBackslash($scanned->class);
             $lines .= "                '{$escapedClass}' => '{$scanned->scope->name}',\n";
         }

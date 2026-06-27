@@ -14,10 +14,12 @@ namespace PHPdot\Package;
 use Composer\Autoload\ClassLoader;
 use Composer\InstalledVersions;
 use PHPdot\Container\ContainerBuilder;
+use PHPdot\Package\Contract\InstallHandler;
 use PHPdot\Package\Generator\ConfigFileGenerator;
 use PHPdot\Package\Generator\DefinitionGenerator;
 use PHPdot\Package\Generator\ManifestGenerator;
 use PHPdot\Package\Scanner\PackageScanner;
+use PHPdot\Package\Scanner\ScannedClass;
 use ReflectionClass;
 use RuntimeException;
 
@@ -218,11 +220,16 @@ final class PackageManager
             $this->environments,
         );
 
+        $serviceCount = 0;
         $bindingCount = 0;
         $configCount = 0;
         $packageNames = [];
 
         foreach ($classes as $scanned) {
+            if ($scanned->scope !== null) {
+                $serviceCount++;
+            }
+
             $bindingCount += count($scanned->binds);
 
             if ($scanned->configName !== null) {
@@ -231,6 +238,8 @@ final class PackageManager
 
             $packageNames[$scanned->package] = true;
         }
+
+        $installMessages = $this->runInstallHooks($classes);
 
         $orphanedConfigs = [];
 
@@ -244,12 +253,46 @@ final class PackageManager
 
         return new RebuildResult(
             packageCount: count($packageNames),
-            serviceCount: count($classes),
+            serviceCount: $serviceCount,
             bindingCount: $bindingCount,
             configCount: $configCount,
             generatedConfigs: $generatedConfigs,
             orphanedConfigs: $orphanedConfigs,
+            installMessages: $installMessages,
         );
+    }
+
+    /**
+     * Invoke discovered #[InstallHook] handlers now that config files exist.
+     * Handlers are idempotent by contract; this runs CLI-only at composer time.
+     *
+     * @param list<ScannedClass> $classes
+     *
+     * @return list<string> One-line messages returned by the handlers
+     */
+    private function runInstallHooks(array $classes): array
+    {
+        $messages = [];
+
+        foreach ($classes as $scanned) {
+            if (!$scanned->installHook) {
+                continue;
+            }
+
+            $handler = $scanned->class;
+
+            if (!is_a($handler, InstallHandler::class, true)) {
+                continue;
+            }
+
+            $message = $handler::install($this->basePath, $this->configPath);
+
+            if ($message !== null) {
+                $messages[] = $message;
+            }
+        }
+
+        return $messages;
     }
 
     /**

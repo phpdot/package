@@ -59,6 +59,17 @@ final class DefinitionGeneratorTest extends TestCase
     }
 
     #[Test]
+    public function it_skips_classes_without_a_scope(): void
+    {
+        // An install-hook-only class carries no scope and gets no definition.
+        $output = $this->generator->generate([
+            new ScannedClass('App\\Installer', null, [], [], null, 'app/pkg', [], true),
+        ]);
+
+        self::assertStringNotContainsString('App\\Installer', $output);
+    }
+
+    #[Test]
     public function it_generates_interface_binding(): void
     {
         $output = $this->generator->generate([

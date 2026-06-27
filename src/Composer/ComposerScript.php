@@ -44,6 +44,10 @@ final class ComposerScript
             $io->write(sprintf('<info>phpdot/package:</info> generated %s', $relative));
         }
 
+        foreach ($result->installMessages as $message) {
+            $io->write(sprintf('<info>%s</info>', $message));
+        }
+
         $orphans = $result->orphanedConfigs;
 
         if ($orphans !== []) {
