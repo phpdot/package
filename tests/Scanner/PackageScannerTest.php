@@ -13,6 +13,7 @@ use PHPdot\Package\Tests\Fixtures\BuiltinFirstService;
 use PHPdot\Package\Tests\Fixtures\InstallHookWithoutHandler;
 use PHPdot\Package\Tests\Fixtures\IntersectionService;
 use PHPdot\Package\Tests\Fixtures\NoAttributeClass;
+use PHPdot\Package\Tests\Fixtures\OptionalConcreteService;
 use PHPdot\Package\Tests\Fixtures\OptionalDependencyService;
 use PHPdot\Package\Tests\Fixtures\SampleConfig;
 use PHPdot\Package\Tests\Fixtures\SampleInstallHook;
@@ -381,13 +382,26 @@ final class PackageScannerTest extends TestCase
     }
 
     #[Test]
-    public function it_skips_optional_params(): void
+    public function it_skips_optional_params_with_non_constructible_types(): void
     {
         $results = $this->scanner->scanDirectory($this->fixturesDir, 'PHPdot\\Package\\Tests\\Fixtures\\', 'test/pkg');
         $found = $this->findByClass($results, OptionalDependencyService::class);
 
         self::assertNotNull($found);
         self::assertSame(['service' => SimpleService::class], $found->params);
+    }
+
+    #[Test]
+    public function it_injects_optional_params_with_constructible_types(): void
+    {
+        $results = $this->scanner->scanDirectory($this->fixturesDir, 'PHPdot\\Package\\Tests\\Fixtures\\', 'test/pkg');
+        $found = $this->findByClass($results, OptionalConcreteService::class);
+
+        self::assertNotNull($found);
+        self::assertSame(
+            ['required' => SampleInterface::class, 'optional' => SimpleService::class],
+            $found->params,
+        );
     }
 
     /**

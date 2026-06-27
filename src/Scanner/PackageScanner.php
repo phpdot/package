@@ -217,10 +217,10 @@ final class PackageScanner
     }
 
     /**
-     * Required constructor params as name => resolvable type FQCN. Optional
-     * params are skipped so their defaults apply; params with no resolvable
-     * class (builtin, union) are skipped too. The generator emits named
-     * arguments, so skipping a param never shifts the others.
+     * Constructor params as name => resolvable type FQCN. Builtin/union params,
+     * and optional params whose type is not a constructible class (interface,
+     * private ctor), are skipped so their default applies; the generator emits
+     * named arguments, so a skipped param never shifts the others.
      *
      * @param ReflectionClass<object> $ref
      * @return array<string, class-string>
@@ -236,18 +236,28 @@ final class PackageScanner
         $params = [];
 
         foreach ($constructor->getParameters() as $param) {
-            if ($param->isOptional()) {
+            $class = $this->resolvableClass($param->getType());
+
+            if ($class === null) {
                 continue;
             }
 
-            $class = $this->resolvableClass($param->getType());
-
-            if ($class !== null) {
-                $params[$param->getName()] = $class;
+            if ($param->isOptional() && !$this->isConstructible($class)) {
+                continue;
             }
+
+            $params[$param->getName()] = $class;
         }
 
         return $params;
+    }
+
+    /**
+     * @param class-string $class
+     */
+    private function isConstructible(string $class): bool
+    {
+        return class_exists($class) && new ReflectionClass($class)->isInstantiable();
     }
 
     /**
