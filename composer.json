@@ -12,7 +12,7 @@
     "keywords": ["package", "scanner", "generator", "attributes", "container", "autowiring"],
     "require": {
         "php": ">=8.4",
-        "phpdot/container": "^1.2",
+        "phpdot/container": "^1.9",
         "symfony/console": "^8.0"
     },
     "require-dev": {
